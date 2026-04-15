@@ -1,8 +1,8 @@
+//PLAIN OLD JAVA OBJECT(This is a JPA Entity- a java class that maps directly to a database table)
 package com.example.groceryapi.model;
 
 import java.time.LocalDateTime;
 
-import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -15,58 +15,53 @@ public class Users {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "\"UserId\"")
-    private int id;
+    private int userid;
 
-    @Column(name = "\"Name\"")
     private String name;
 
-    @Column(name = "\"Email\"")
     private String email;
 
-    @Column(name = "\"Password\"")
     private String password;
 
-    @Column(name = "\"CreatedAt\"")
-    private LocalDateTime createdAt;
+    private LocalDateTime createdat;
 
-    public int getId() {
-        return id;
+    public int getuserid() {
+        return userid;
     }
 
-    public void setId(int id) {
-        this.id = id;
+    public void setuserid(int userid) {
+        this.userid = userid;
     }
 
-    public String getName() {
+    public String getname() {
         return name;
     }
 
-    public void setName(String name) {
+    public void setname(String name) {
         this.name = name;
     }
 
-    public String getEmail() {
+    public String getemail() {
         return email;
     }
 
-    public void setEmail(String email) {
+    public void setemail(String email) {
         this.email = email;
     }
 
-    public String getPassword() {
+    public String getpassword() {
         return password;
     }
 
-    public void setPassword(String password) {
+    public void setpassword(String password) {
         this.password = password;
     }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
+    public LocalDateTime getcreatedat() {
+        return createdat;
     }
 
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
+    public void setcreatedat(LocalDateTime createdat) {
+        this.createdat = createdat;
     }
 }
