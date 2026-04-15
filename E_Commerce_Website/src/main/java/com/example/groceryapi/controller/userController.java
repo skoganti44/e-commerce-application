@@ -14,7 +14,7 @@ public class userController {
     @Autowired
     private userService userService;
 
-    @GetMapping("/users")
+    @GetMapping(value = "/users", headers = "Accept=application/json")
     public List<Users> fetchUsers() {
         return userService.fetchUsers();
     }
