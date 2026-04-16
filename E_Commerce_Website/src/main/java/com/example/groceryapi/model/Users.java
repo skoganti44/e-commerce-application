@@ -9,11 +9,13 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-@Entity
+@Entity // Marks this class as a database table
 @Table(name = "\"User\"", schema = "public")
 public class Users {
 
-    @Id
+    @Id // Marks the primary key field
+        // @GeneratedValue==>Auto-generates primary key values
+        // GenerationType==>Defines HOW the key is generated
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int userid;
 
