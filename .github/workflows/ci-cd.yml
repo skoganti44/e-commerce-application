@@ -65,9 +65,9 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
 
-      # Run all unit, service, controller, and ATDD tests
+      # Run unit, service, and controller tests (exclude Karate - needs running server)
       - name: Run tests
-        run: mvn -B test -f E_Commerce_Website/pom.xml
+        run: mvn -B test -Dtest="!com.example.groceryapi.karate.**" -f E_Commerce_Website/pom.xml
 
       # Upload test results as artifact
       - name: Upload test results
