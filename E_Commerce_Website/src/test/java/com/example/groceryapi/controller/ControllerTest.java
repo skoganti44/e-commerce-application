@@ -1,7 +1,5 @@
 package com.example.groceryapi.controller;
 
-import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -17,9 +15,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.example.groceryapi.model.Role;
-import com.example.groceryapi.model.Users;
 import com.example.groceryapi.service.userService;
+import com.example.groceryapi.testdata.TestData;
 
 @WebMvcTest(Controller.class)
 public class ControllerTest {
@@ -32,23 +29,7 @@ public class ControllerTest {
 
     @Test
     public void testFetchUsers_ReturnsUserList() throws Exception {
-        Users user1 = new Users();
-        user1.setuserid(1);
-        user1.setname("John");
-        user1.setemail("john@example.com");
-        user1.setpassword("pass123");
-        user1.setcreatedat(LocalDateTime.of(2025, 1, 1, 10, 0));
-
-        Users user2 = new Users();
-        user2.setuserid(2);
-        user2.setname("Jane");
-        user2.setemail("jane@example.com");
-        user2.setpassword("pass456");
-        user2.setcreatedat(LocalDateTime.of(2025, 2, 1, 12, 0));
-
-        List<Users> userList = Arrays.asList(user1, user2);
-
-        when(userService.fetchUsers()).thenReturn(userList);
+        when(userService.fetchUsers()).thenReturn(TestData.users());
 
         mockMvc.perform(get("/users").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -76,29 +57,17 @@ public class ControllerTest {
 
     @Test
     public void testFetchRoles_ReturnsRoleList() throws Exception {
-        Role role1 = new Role();
-        role1.setId(1);
-        role1.setFullName("Alice Smith");
-        role1.setRole("Manager");
-        role1.setDepartment("Sales");
-
-        Role role2 = new Role();
-        role2.setId(2);
-        role2.setFullName("Bob Johnson");
-        role2.setRole("Engineer");
-        role2.setDepartment("IT");
-
-        when(userService.fetchRoles(null)).thenReturn(Arrays.asList(role1, role2));
+        when(userService.fetchRoles(null)).thenReturn(List.of(TestData.alice(), TestData.bob()));
 
         mockMvc.perform(get("/roles").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].fullName").value("Alice Smith"))
                 .andExpect(jsonPath("$[0].role").value("Manager"))
-                .andExpect(jsonPath("$[0].department").value("Sales"))
+                .andExpect(jsonPath("$[0].department").value(TestData.SALES))
                 .andExpect(jsonPath("$[1].fullName").value("Bob Johnson"))
                 .andExpect(jsonPath("$[1].role").value("Engineer"))
-                .andExpect(jsonPath("$[1].department").value("IT"));
+                .andExpect(jsonPath("$[1].department").value(TestData.IT));
     }
 
     @Test
@@ -118,18 +87,12 @@ public class ControllerTest {
 
     @Test
     public void testFetchRoles_FilterByDepartment() throws Exception {
-        Role role = new Role();
-        role.setId(3);
-        role.setFullName("Joe Jonnas");
-        role.setRole("Manager");
-        role.setDepartment("Fresh Products");
+        when(userService.fetchRoles(TestData.FRESH_PRODUCTS)).thenReturn(List.of(TestData.joeJonnas()));
 
-        when(userService.fetchRoles("Fresh Products")).thenReturn(List.of(role));
-
-        mockMvc.perform(get("/roles").param("department", "Fresh Products").accept(MediaType.APPLICATION_JSON))
+        mockMvc.perform(get("/roles").param("department", TestData.FRESH_PRODUCTS).accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].fullName").value("Joe Jonnas"))
-                .andExpect(jsonPath("$[0].department").value("Fresh Products"));
+                .andExpect(jsonPath("$[0].department").value(TestData.FRESH_PRODUCTS));
     }
 }

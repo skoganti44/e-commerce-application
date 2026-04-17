@@ -1,6 +1,5 @@
 package com.example.groceryapi.repository;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,6 +12,7 @@ import org.springframework.context.annotation.Import;
 
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.Users;
+import com.example.groceryapi.testdata.TestData;
 
 @DataJpaTest
 @Import(Repository.class)
@@ -21,26 +21,9 @@ public class RepositoryTest {
     @Autowired
     private Repository repository;
 
-    private Users newUser(String name, String email) {
-        Users u = new Users();
-        u.setname(name);
-        u.setemail(email);
-        u.setpassword("pass123");
-        u.setcreatedat(LocalDateTime.now());
-        return u;
-    }
-
-    private Role newRole(String fullName, String role, String department) {
-        Role r = new Role();
-        r.setFullName(fullName);
-        r.setRole(role);
-        r.setDepartment(department);
-        return r;
-    }
-
     @Test
     public void testSaveUser() {
-        Users saved = repository.saveUser(newUser("John", "john@example.com"));
+        Users saved = repository.saveUser(TestData.newJohn());
 
         assertThat(saved.getuserid()).isGreaterThan(0);
         assertThat(saved.getname()).isEqualTo("John");
@@ -49,8 +32,8 @@ public class RepositoryTest {
 
     @Test
     public void testFindAllUsers() {
-        repository.saveUser(newUser("John", "john@example.com"));
-        repository.saveUser(newUser("Jane", "jane@example.com"));
+        repository.saveUser(TestData.newJohn());
+        repository.saveUser(TestData.newJane());
 
         List<Users> users = repository.findAllUsers();
 
@@ -60,7 +43,7 @@ public class RepositoryTest {
 
     @Test
     public void testFindUserById() {
-        Users persisted = repository.saveUser(newUser("John", "john@example.com"));
+        Users persisted = repository.saveUser(TestData.newJohn());
 
         Optional<Users> found = repository.findUserById(persisted.getuserid());
 
@@ -70,7 +53,7 @@ public class RepositoryTest {
 
     @Test
     public void testDeleteUserById() {
-        Users persisted = repository.saveUser(newUser("John", "john@example.com"));
+        Users persisted = repository.saveUser(TestData.newJohn());
 
         repository.deleteUserById(persisted.getuserid());
 
@@ -84,18 +67,18 @@ public class RepositoryTest {
 
     @Test
     public void testSaveRole() {
-        Role saved = repository.saveRole(newRole("Alice Smith", "Manager", "Sales"));
+        Role saved = repository.saveRole(newRole("Alice Smith", "Manager", TestData.SALES));
 
         assertThat(saved.getId()).isGreaterThan(0);
         assertThat(saved.getFullName()).isEqualTo("Alice Smith");
         assertThat(saved.getRole()).isEqualTo("Manager");
-        assertThat(saved.getDepartment()).isEqualTo("Sales");
+        assertThat(saved.getDepartment()).isEqualTo(TestData.SALES);
     }
 
     @Test
     public void testFindAllRoles() {
-        repository.saveRole(newRole("Alice Smith", "Manager", "Sales"));
-        repository.saveRole(newRole("Bob Johnson", "Engineer", "IT"));
+        repository.saveRole(newRole("Alice Smith", "Manager", TestData.SALES));
+        repository.saveRole(newRole("Bob Johnson", "Engineer", TestData.IT));
 
         List<Role> roles = repository.findAllRoles();
 
@@ -105,7 +88,7 @@ public class RepositoryTest {
 
     @Test
     public void testFindRoleById() {
-        Role persisted = repository.saveRole(newRole("Alice Smith", "Manager", "Sales"));
+        Role persisted = repository.saveRole(newRole("Alice Smith", "Manager", TestData.SALES));
 
         Optional<Role> found = repository.findRoleById(persisted.getId());
 
@@ -115,7 +98,7 @@ public class RepositoryTest {
 
     @Test
     public void testDeleteRoleById() {
-        Role persisted = repository.saveRole(newRole("Alice Smith", "Manager", "Sales"));
+        Role persisted = repository.saveRole(newRole("Alice Smith", "Manager", TestData.SALES));
 
         repository.deleteRoleById(persisted.getId());
 
@@ -129,11 +112,11 @@ public class RepositoryTest {
 
     @Test
     public void testFindRolesByDepartment() {
-        repository.saveRole(newRole("Alice Smith", "Manager", "Fresh Products"));
-        repository.saveRole(newRole("Bob Johnson", "Engineer", "IT"));
-        repository.saveRole(newRole("Carol White", "Lead", "Fresh Products"));
+        repository.saveRole(newRole("Alice Smith", "Manager", TestData.FRESH_PRODUCTS));
+        repository.saveRole(newRole("Bob Johnson", "Engineer", TestData.IT));
+        repository.saveRole(newRole("Carol White", "Lead", TestData.FRESH_PRODUCTS));
 
-        List<Role> roles = repository.findRolesByDepartment("Fresh Products");
+        List<Role> roles = repository.findRolesByDepartment(TestData.FRESH_PRODUCTS);
 
         assertThat(roles).hasSize(2);
         assertThat(roles).extracting(Role::getFullName)
@@ -142,8 +125,16 @@ public class RepositoryTest {
 
     @Test
     public void testFindRolesByDepartment_NoMatch() {
-        repository.saveRole(newRole("Alice Smith", "Manager", "Sales"));
+        repository.saveRole(newRole("Alice Smith", "Manager", TestData.SALES));
 
         assertThat(repository.findRolesByDepartment("Nonexistent")).isEmpty();
+    }
+
+    private static Role newRole(String fullName, String role, String department) {
+        Role r = new Role();
+        r.setFullName(fullName);
+        r.setRole(role);
+        r.setDepartment(department);
+        return r;
     }
 }

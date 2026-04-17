@@ -1,7 +1,5 @@
 package com.example.groceryapi.service;
 
-import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -19,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.Users;
 import com.example.groceryapi.repository.Repository;
+import com.example.groceryapi.testdata.TestData;
 
 @ExtendWith(MockitoExtension.class)
 public class userServiceTest {
@@ -31,21 +30,7 @@ public class userServiceTest {
 
     @Test
     public void testFetchUsers_ReturnsUserList() {
-        Users user1 = new Users();
-        user1.setuserid(1);
-        user1.setname("John");
-        user1.setemail("john@example.com");
-        user1.setpassword("pass123");
-        user1.setcreatedat(LocalDateTime.of(2025, 1, 1, 10, 0));
-
-        Users user2 = new Users();
-        user2.setuserid(2);
-        user2.setname("Jane");
-        user2.setemail("jane@example.com");
-        user2.setpassword("pass456");
-        user2.setcreatedat(LocalDateTime.of(2025, 2, 1, 12, 0));
-
-        when(repository.findAllUsers()).thenReturn(Arrays.asList(user1, user2));
+        when(repository.findAllUsers()).thenReturn(TestData.users());
 
         List<Users> result = userService.fetchUsers();
 
@@ -67,41 +52,23 @@ public class userServiceTest {
 
     @Test
     public void testFetchUsers_VerifiesCorrectFields() {
-        Users user = new Users();
-        user.setuserid(1);
-        user.setname("John");
-        user.setemail("john@example.com");
-        user.setpassword("pass123");
-        user.setcreatedat(LocalDateTime.of(2025, 3, 15, 9, 30));
-
-        when(repository.findAllUsers()).thenReturn(List.of(user));
+        Users expected = TestData.johnMarch();
+        when(repository.findAllUsers()).thenReturn(List.of(expected));
 
         List<Users> result = userService.fetchUsers();
 
         assertThat(result).hasSize(1);
         Users returnedUser = result.get(0);
-        assertThat(returnedUser.getuserid()).isEqualTo(1);
-        assertThat(returnedUser.getname()).isEqualTo("John");
-        assertThat(returnedUser.getemail()).isEqualTo("john@example.com");
-        assertThat(returnedUser.getpassword()).isEqualTo("pass123");
-        assertThat(returnedUser.getcreatedat()).isEqualTo(LocalDateTime.of(2025, 3, 15, 9, 30));
+        assertThat(returnedUser.getuserid()).isEqualTo(expected.getuserid());
+        assertThat(returnedUser.getname()).isEqualTo(expected.getname());
+        assertThat(returnedUser.getemail()).isEqualTo(expected.getemail());
+        assertThat(returnedUser.getpassword()).isEqualTo(expected.getpassword());
+        assertThat(returnedUser.getcreatedat()).isEqualTo(expected.getcreatedat());
     }
 
     @Test
     public void testFetchRoles_ReturnsRoleList() {
-        Role role1 = new Role();
-        role1.setId(1);
-        role1.setFullName("Alice Smith");
-        role1.setRole("Manager");
-        role1.setDepartment("Sales");
-
-        Role role2 = new Role();
-        role2.setId(2);
-        role2.setFullName("Bob Johnson");
-        role2.setRole("Engineer");
-        role2.setDepartment("IT");
-
-        when(repository.findAllRoles()).thenReturn(Arrays.asList(role1, role2));
+        when(repository.findAllRoles()).thenReturn(List.of(TestData.alice(), TestData.bob()));
 
         List<Role> result = userService.fetchRoles(null);
 
@@ -123,30 +90,19 @@ public class userServiceTest {
 
     @Test
     public void testFetchRoles_FilterByDepartment() {
-        Role role = new Role();
-        role.setId(3);
-        role.setFullName("Joe Jonnas");
-        role.setRole("Manager");
-        role.setDepartment("Fresh Products");
+        Role joe = TestData.joeJonnas();
+        when(repository.findRolesByDepartment(TestData.FRESH_PRODUCTS)).thenReturn(List.of(joe));
 
-        when(repository.findRolesByDepartment("Fresh Products")).thenReturn(List.of(role));
-
-        List<Role> result = userService.fetchRoles("Fresh Products");
+        List<Role> result = userService.fetchRoles(TestData.FRESH_PRODUCTS);
 
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).getDepartment()).isEqualTo("Fresh Products");
-        verify(repository, times(1)).findRolesByDepartment("Fresh Products");
+        assertThat(result.get(0).getDepartment()).isEqualTo(TestData.FRESH_PRODUCTS);
+        verify(repository, times(1)).findRolesByDepartment(TestData.FRESH_PRODUCTS);
     }
 
     @Test
     public void testFetchRoles_BlankDepartment_ReturnsAll() {
-        Role role = new Role();
-        role.setId(1);
-        role.setFullName("Alice Smith");
-        role.setRole("Manager");
-        role.setDepartment("Sales");
-
-        when(repository.findAllRoles()).thenReturn(List.of(role));
+        when(repository.findAllRoles()).thenReturn(List.of(TestData.alice()));
 
         List<Role> result = userService.fetchRoles("");
 
@@ -156,21 +112,16 @@ public class userServiceTest {
 
     @Test
     public void testFetchRoles_VerifiesCorrectFields() {
-        Role role = new Role();
-        role.setId(1);
-        role.setFullName("Alice Smith");
-        role.setRole("Manager");
-        role.setDepartment("Sales");
-
-        when(repository.findAllRoles()).thenReturn(List.of(role));
+        Role expected = TestData.alice();
+        when(repository.findAllRoles()).thenReturn(List.of(expected));
 
         List<Role> result = userService.fetchRoles(null);
 
         assertThat(result).hasSize(1);
         Role returned = result.get(0);
-        assertThat(returned.getId()).isEqualTo(1);
-        assertThat(returned.getFullName()).isEqualTo("Alice Smith");
-        assertThat(returned.getRole()).isEqualTo("Manager");
-        assertThat(returned.getDepartment()).isEqualTo("Sales");
+        assertThat(returned.getId()).isEqualTo(expected.getId());
+        assertThat(returned.getFullName()).isEqualTo(expected.getFullName());
+        assertThat(returned.getRole()).isEqualTo(expected.getRole());
+        assertThat(returned.getDepartment()).isEqualTo(expected.getDepartment());
     }
 }
