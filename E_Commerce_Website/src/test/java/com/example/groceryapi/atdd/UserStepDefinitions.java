@@ -14,7 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import com.example.groceryapi.model.Users;
-import com.example.groceryapi.repository.UserRepository;
+import com.example.groceryapi.repository.Repository;
 
 import io.cucumber.datatable.DataTable;
 import io.cucumber.java.After;
@@ -29,13 +29,13 @@ public class UserStepDefinitions {
     private MockMvc mockMvc;
 
     @Autowired
-    private UserRepository userRepository;
+    private Repository repository;
 
     private ResultActions resultActions;
 
     @After
     public void cleanup() {
-        userRepository.deleteAll();
+        repository.deleteAllUsers();
     }
 
     @Given("the following users exist in the system")
@@ -47,13 +47,13 @@ public class UserStepDefinitions {
             user.setemail(row.get("email"));
             user.setpassword(row.get("password"));
             user.setcreatedat(LocalDateTime.now());
-            userRepository.save(user);
+            repository.saveUser(user);
         }
     }
 
     @Given("no users exist in the system")
     public void noUsersExist() {
-        userRepository.deleteAll();
+        repository.deleteAllUsers();
     }
 
     @When("I send a GET request to {string} with Accept header {string}")

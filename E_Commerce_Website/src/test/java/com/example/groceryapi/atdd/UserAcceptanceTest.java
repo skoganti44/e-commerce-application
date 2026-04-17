@@ -19,7 +19,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
 import com.example.groceryapi.model.Users;
-import com.example.groceryapi.repository.UserRepository;
+import com.example.groceryapi.repository.Repository;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public class UserAcceptanceTest {
@@ -28,12 +28,12 @@ public class UserAcceptanceTest {
     private int port;
 
     @Autowired
-    private UserRepository userRepository;
+    private Repository repository;
 
     @BeforeEach
     public void setup() {
         RestAssured.port = port;
-        userRepository.deleteAll();
+        repository.deleteAllUsers();
     }
 
     @Test
@@ -45,14 +45,14 @@ public class UserAcceptanceTest {
         user1.setemail("john@example.com");
         user1.setpassword("pass123");
         user1.setcreatedat(LocalDateTime.now());
-        userRepository.save(user1);
+        repository.saveUser(user1);
 
         Users user2 = new Users();
         user2.setname("Jane");
         user2.setemail("jane@example.com");
         user2.setpassword("pass456");
         user2.setcreatedat(LocalDateTime.now());
-        userRepository.save(user2);
+        repository.saveUser(user2);
 
         // WHEN + THEN
         given()
@@ -92,7 +92,7 @@ public class UserAcceptanceTest {
         user.setemail("john@example.com");
         user.setpassword("pass123");
         user.setcreatedat(LocalDateTime.of(2025, 1, 1, 10, 0));
-        userRepository.save(user);
+        repository.saveUser(user);
 
         // WHEN + THEN
         given()

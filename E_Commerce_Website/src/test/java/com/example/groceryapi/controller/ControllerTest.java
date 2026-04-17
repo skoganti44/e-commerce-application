@@ -88,7 +88,7 @@ public class ControllerTest {
         role2.setRole("Engineer");
         role2.setDepartment("IT");
 
-        when(userService.fetchRoles()).thenReturn(Arrays.asList(role1, role2));
+        when(userService.fetchRoles(null)).thenReturn(Arrays.asList(role1, role2));
 
         mockMvc.perform(get("/roles").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -103,7 +103,7 @@ public class ControllerTest {
 
     @Test
     public void testFetchRoles_ReturnsEmptyList() throws Exception {
-        when(userService.fetchRoles()).thenReturn(Collections.emptyList());
+        when(userService.fetchRoles(null)).thenReturn(Collections.emptyList());
 
         mockMvc.perform(get("/roles").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -114,5 +114,22 @@ public class ControllerTest {
     public void testFetchRoles_WithoutAcceptHeader_Returns406() throws Exception {
         mockMvc.perform(get("/roles").accept(MediaType.APPLICATION_XML))
                 .andExpect(status().isNotAcceptable());
+    }
+
+    @Test
+    public void testFetchRoles_FilterByDepartment() throws Exception {
+        Role role = new Role();
+        role.setId(3);
+        role.setFullName("Joe Jonnas");
+        role.setRole("Manager");
+        role.setDepartment("Fresh Products");
+
+        when(userService.fetchRoles("Fresh Products")).thenReturn(List.of(role));
+
+        mockMvc.perform(get("/roles").param("department", "Fresh Products").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].fullName").value("Joe Jonnas"))
+                .andExpect(jsonPath("$[0].department").value("Fresh Products"));
     }
 }

@@ -9,25 +9,25 @@ import org.springframework.stereotype.Service;
 
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.Users;
-import com.example.groceryapi.repository.RoleRepository;
-import com.example.groceryapi.repository.UserRepository;
+import com.example.groceryapi.repository.Repository;
 
 @Service
 public class userService {
 
-    private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
+    private final Repository repository;
 
-    public userService(UserRepository userRepository, RoleRepository roleRepository) {
-        this.userRepository = userRepository;
-        this.roleRepository = roleRepository;
+    public userService(Repository repository) {
+        this.repository = repository;
     }
 
     public List<Users> fetchUsers() {
-        return userRepository.findAll();
+        return repository.findAllUsers();
     }
 
-    public List<Role> fetchRoles() {
-        return roleRepository.findAll();
+    public List<Role> fetchRoles(String department) {
+        if (department == null || department.isBlank()) {
+            return repository.findAllRoles();
+        }
+        return repository.findRolesByDepartment(department);
     }
 }

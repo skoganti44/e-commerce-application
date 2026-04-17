@@ -1,0 +1,81 @@
+package com.example.groceryapi.repository;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.example.groceryapi.model.Role;
+import com.example.groceryapi.model.Users;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+
+@Component
+@Transactional
+public class Repository {
+
+    @PersistenceContext
+    private EntityManager em;
+
+    public List<Users> findAllUsers() {
+        return em.createQuery("SELECT u FROM Users u", Users.class).getResultList();
+    }
+
+    public Optional<Users> findUserById(int id) {
+        return Optional.ofNullable(em.find(Users.class, id));
+    }
+
+    public Users saveUser(Users user) {
+        if (user.getuserid() == 0) {
+            em.persist(user);
+            return user;
+        }
+        return em.merge(user);
+    }
+
+    public void deleteUserById(int id) {
+        Users user = em.find(Users.class, id);
+        if (user != null) {
+            em.remove(user);
+        }
+    }
+
+    public void deleteAllUsers() {
+        em.createQuery("DELETE FROM Users").executeUpdate();
+    }
+
+    public List<Role> findAllRoles() {
+        return em.createQuery("SELECT r FROM Role r", Role.class).getResultList();
+    }
+
+    public List<Role> findRolesByDepartment(String department) {
+        return em.createQuery("SELECT r FROM Role r WHERE r.department = :department", Role.class)
+                .setParameter("department", department)
+                .getResultList();
+    }
+
+    public Optional<Role> findRoleById(int id) {
+        return Optional.ofNullable(em.find(Role.class, id));
+    }
+
+    public Role saveRole(Role role) {
+        if (role.getId() == 0) {
+            em.persist(role);
+            return role;
+        }
+        return em.merge(role);
+    }
+
+    public void deleteRoleById(int id) {
+        Role role = em.find(Role.class, id);
+        if (role != null) {
+            em.remove(role);
+        }
+    }
+
+    public void deleteAllRoles() {
+        em.createQuery("DELETE FROM Role").executeUpdate();
+    }
+}

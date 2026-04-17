@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.groceryapi.model.Role;
@@ -22,7 +23,7 @@ public class Controller {
     }
 
     @GetMapping(value = "/roles", headers = "Accept=application/json")
-    public List<Role> fetchRoles() {
-        return userService.fetchRoles();
+    public List<Role> fetchRoles(@RequestParam(required = false) String department) {
+        return userService.fetchRoles(department);
     }
 }

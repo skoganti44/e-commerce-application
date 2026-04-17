@@ -18,17 +18,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.Users;
-import com.example.groceryapi.repository.RoleRepository;
-import com.example.groceryapi.repository.UserRepository;
+import com.example.groceryapi.repository.Repository;
 
 @ExtendWith(MockitoExtension.class)
 public class userServiceTest {
 
     @Mock
-    private UserRepository userRepository;
-
-    @Mock
-    private RoleRepository roleRepository;
+    private Repository repository;
 
     @InjectMocks
     private userService userService;
@@ -49,24 +45,24 @@ public class userServiceTest {
         user2.setpassword("pass456");
         user2.setcreatedat(LocalDateTime.of(2025, 2, 1, 12, 0));
 
-        when(userRepository.findAll()).thenReturn(Arrays.asList(user1, user2));
+        when(repository.findAllUsers()).thenReturn(Arrays.asList(user1, user2));
 
         List<Users> result = userService.fetchUsers();
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).getname()).isEqualTo("John");
         assertThat(result.get(1).getname()).isEqualTo("Jane");
-        verify(userRepository, times(1)).findAll();
+        verify(repository, times(1)).findAllUsers();
     }
 
     @Test
     public void testFetchUsers_ReturnsEmptyList() {
-        when(userRepository.findAll()).thenReturn(Collections.emptyList());
+        when(repository.findAllUsers()).thenReturn(Collections.emptyList());
 
         List<Users> result = userService.fetchUsers();
 
         assertThat(result).isEmpty();
-        verify(userRepository, times(1)).findAll();
+        verify(repository, times(1)).findAllUsers();
     }
 
     @Test
@@ -78,7 +74,7 @@ public class userServiceTest {
         user.setpassword("pass123");
         user.setcreatedat(LocalDateTime.of(2025, 3, 15, 9, 30));
 
-        when(userRepository.findAll()).thenReturn(List.of(user));
+        when(repository.findAllUsers()).thenReturn(List.of(user));
 
         List<Users> result = userService.fetchUsers();
 
@@ -105,24 +101,57 @@ public class userServiceTest {
         role2.setRole("Engineer");
         role2.setDepartment("IT");
 
-        when(roleRepository.findAll()).thenReturn(Arrays.asList(role1, role2));
+        when(repository.findAllRoles()).thenReturn(Arrays.asList(role1, role2));
 
-        List<Role> result = userService.fetchRoles();
+        List<Role> result = userService.fetchRoles(null);
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).getFullName()).isEqualTo("Alice Smith");
         assertThat(result.get(1).getFullName()).isEqualTo("Bob Johnson");
-        verify(roleRepository, times(1)).findAll();
+        verify(repository, times(1)).findAllRoles();
     }
 
     @Test
     public void testFetchRoles_ReturnsEmptyList() {
-        when(roleRepository.findAll()).thenReturn(Collections.emptyList());
+        when(repository.findAllRoles()).thenReturn(Collections.emptyList());
 
-        List<Role> result = userService.fetchRoles();
+        List<Role> result = userService.fetchRoles(null);
 
         assertThat(result).isEmpty();
-        verify(roleRepository, times(1)).findAll();
+        verify(repository, times(1)).findAllRoles();
+    }
+
+    @Test
+    public void testFetchRoles_FilterByDepartment() {
+        Role role = new Role();
+        role.setId(3);
+        role.setFullName("Joe Jonnas");
+        role.setRole("Manager");
+        role.setDepartment("Fresh Products");
+
+        when(repository.findRolesByDepartment("Fresh Products")).thenReturn(List.of(role));
+
+        List<Role> result = userService.fetchRoles("Fresh Products");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getDepartment()).isEqualTo("Fresh Products");
+        verify(repository, times(1)).findRolesByDepartment("Fresh Products");
+    }
+
+    @Test
+    public void testFetchRoles_BlankDepartment_ReturnsAll() {
+        Role role = new Role();
+        role.setId(1);
+        role.setFullName("Alice Smith");
+        role.setRole("Manager");
+        role.setDepartment("Sales");
+
+        when(repository.findAllRoles()).thenReturn(List.of(role));
+
+        List<Role> result = userService.fetchRoles("");
+
+        assertThat(result).hasSize(1);
+        verify(repository, times(1)).findAllRoles();
     }
 
     @Test
@@ -133,9 +162,9 @@ public class userServiceTest {
         role.setRole("Manager");
         role.setDepartment("Sales");
 
-        when(roleRepository.findAll()).thenReturn(List.of(role));
+        when(repository.findAllRoles()).thenReturn(List.of(role));
 
-        List<Role> result = userService.fetchRoles();
+        List<Role> result = userService.fetchRoles(null);
 
         assertThat(result).hasSize(1);
         Role returned = result.get(0);
