@@ -16,7 +16,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.Users;
+import com.example.groceryapi.repository.RoleRepository;
 import com.example.groceryapi.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -24,6 +26,9 @@ public class userServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private RoleRepository roleRepository;
 
     @InjectMocks
     private userService userService;
@@ -84,5 +89,59 @@ public class userServiceTest {
         assertThat(returnedUser.getemail()).isEqualTo("john@example.com");
         assertThat(returnedUser.getpassword()).isEqualTo("pass123");
         assertThat(returnedUser.getcreatedat()).isEqualTo(LocalDateTime.of(2025, 3, 15, 9, 30));
+    }
+
+    @Test
+    public void testFetchRoles_ReturnsRoleList() {
+        Role role1 = new Role();
+        role1.setId(1);
+        role1.setFullName("Alice Smith");
+        role1.setRole("Manager");
+        role1.setDepartment("Sales");
+
+        Role role2 = new Role();
+        role2.setId(2);
+        role2.setFullName("Bob Johnson");
+        role2.setRole("Engineer");
+        role2.setDepartment("IT");
+
+        when(roleRepository.findAll()).thenReturn(Arrays.asList(role1, role2));
+
+        List<Role> result = userService.fetchRoles();
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getFullName()).isEqualTo("Alice Smith");
+        assertThat(result.get(1).getFullName()).isEqualTo("Bob Johnson");
+        verify(roleRepository, times(1)).findAll();
+    }
+
+    @Test
+    public void testFetchRoles_ReturnsEmptyList() {
+        when(roleRepository.findAll()).thenReturn(Collections.emptyList());
+
+        List<Role> result = userService.fetchRoles();
+
+        assertThat(result).isEmpty();
+        verify(roleRepository, times(1)).findAll();
+    }
+
+    @Test
+    public void testFetchRoles_VerifiesCorrectFields() {
+        Role role = new Role();
+        role.setId(1);
+        role.setFullName("Alice Smith");
+        role.setRole("Manager");
+        role.setDepartment("Sales");
+
+        when(roleRepository.findAll()).thenReturn(List.of(role));
+
+        List<Role> result = userService.fetchRoles();
+
+        assertThat(result).hasSize(1);
+        Role returned = result.get(0);
+        assertThat(returned.getId()).isEqualTo(1);
+        assertThat(returned.getFullName()).isEqualTo("Alice Smith");
+        assertThat(returned.getRole()).isEqualTo("Manager");
+        assertThat(returned.getDepartment()).isEqualTo("Sales");
     }
 }

@@ -17,11 +17,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.Users;
 import com.example.groceryapi.service.userService;
 
-@WebMvcTest(userController.class)
-public class userControllerTest {
+@WebMvcTest(Controller.class)
+public class ControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -70,6 +71,48 @@ public class userControllerTest {
     @Test
     public void testFetchUsers_WithoutAcceptHeader_Returns406() throws Exception {
         mockMvc.perform(get("/users").accept(MediaType.APPLICATION_XML))
+                .andExpect(status().isNotAcceptable());
+    }
+
+    @Test
+    public void testFetchRoles_ReturnsRoleList() throws Exception {
+        Role role1 = new Role();
+        role1.setId(1);
+        role1.setFullName("Alice Smith");
+        role1.setRole("Manager");
+        role1.setDepartment("Sales");
+
+        Role role2 = new Role();
+        role2.setId(2);
+        role2.setFullName("Bob Johnson");
+        role2.setRole("Engineer");
+        role2.setDepartment("IT");
+
+        when(userService.fetchRoles()).thenReturn(Arrays.asList(role1, role2));
+
+        mockMvc.perform(get("/roles").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].fullName").value("Alice Smith"))
+                .andExpect(jsonPath("$[0].role").value("Manager"))
+                .andExpect(jsonPath("$[0].department").value("Sales"))
+                .andExpect(jsonPath("$[1].fullName").value("Bob Johnson"))
+                .andExpect(jsonPath("$[1].role").value("Engineer"))
+                .andExpect(jsonPath("$[1].department").value("IT"));
+    }
+
+    @Test
+    public void testFetchRoles_ReturnsEmptyList() throws Exception {
+        when(userService.fetchRoles()).thenReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/roles").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    public void testFetchRoles_WithoutAcceptHeader_Returns406() throws Exception {
+        mockMvc.perform(get("/roles").accept(MediaType.APPLICATION_XML))
                 .andExpect(status().isNotAcceptable());
     }
 }
