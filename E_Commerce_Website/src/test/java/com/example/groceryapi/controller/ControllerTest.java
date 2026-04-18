@@ -95,4 +95,57 @@ public class ControllerTest {
                 .andExpect(jsonPath("$[0].fullName").value("Joe Jonnas"))
                 .andExpect(jsonPath("$[0].department").value(TestData.FRESH_PRODUCTS));
     }
+
+    @Test
+    public void testFetchUserRoles_ReturnsAll() throws Exception {
+        when(userService.fetchUserRoles(null, null)).thenReturn(TestData.userRoles());
+
+        mockMvc.perform(get("/userRoles").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].user.name").value("John"))
+                .andExpect(jsonPath("$[0].role.fullName").value("Joe Jonnas"))
+                .andExpect(jsonPath("$[1].user.name").value("Jane"))
+                .andExpect(jsonPath("$[1].role.fullName").value("Bob Johnson"));
+    }
+
+    @Test
+    public void testFetchUserRoles_FilterByUserId() throws Exception {
+        when(userService.fetchUserRoles(1, null)).thenReturn(List.of(TestData.johnAsManager()));
+
+        mockMvc.perform(get("/userRoles").param("userid", "1").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].user.userid").value(1))
+                .andExpect(jsonPath("$[0].user.name").value("John"))
+                .andExpect(jsonPath("$[0].role.fullName").value("Joe Jonnas"))
+                .andExpect(jsonPath("$[0].role.department").value(TestData.FRESH_PRODUCTS));
+    }
+
+    @Test
+    public void testFetchUserRoles_FilterByRoleId() throws Exception {
+        when(userService.fetchUserRoles(null, 2)).thenReturn(List.of(TestData.janeAsEngineer()));
+
+        mockMvc.perform(get("/userRoles").param("roleid", "2").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].user.name").value("Jane"))
+                .andExpect(jsonPath("$[0].role.fullName").value("Bob Johnson"))
+                .andExpect(jsonPath("$[0].role.department").value(TestData.IT));
+    }
+
+    @Test
+    public void testFetchUserRoles_ReturnsEmptyList() throws Exception {
+        when(userService.fetchUserRoles(null, null)).thenReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/userRoles").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    public void testFetchUserRoles_WithoutAcceptHeader_Returns406() throws Exception {
+        mockMvc.perform(get("/userRoles").accept(MediaType.APPLICATION_XML))
+                .andExpect(status().isNotAcceptable());
+    }
 }

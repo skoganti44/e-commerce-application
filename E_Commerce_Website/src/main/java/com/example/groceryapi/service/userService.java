@@ -8,6 +8,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 import com.example.groceryapi.model.Role;
+import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.Users;
 import com.example.groceryapi.repository.Repository;
 
@@ -29,5 +30,15 @@ public class userService {
             return repository.findAllRoles();
         }
         return repository.findRolesByDepartment(department);
+    }
+
+    public List<UserRole> fetchUserRoles(Integer userid, Integer roleid) {
+        if (userid != null) {
+            return repository.findUserRolesByUserId(userid);
+        }
+        if (roleid != null) {
+            return repository.findUserRolesByRoleId(roleid);
+        }
+        return repository.findAllUserRoles();
     }
 }

@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.groceryapi.model.Role;
+import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.Users;
 
 import jakarta.persistence.EntityManager;
@@ -77,5 +78,33 @@ public class Repository {
 
     public void deleteAllRoles() {
         em.createQuery("DELETE FROM Role").executeUpdate();
+    }
+
+    public List<UserRole> findAllUserRoles() {
+        return em.createQuery("SELECT ur FROM UserRole ur", UserRole.class).getResultList();
+    }
+
+    public List<UserRole> findUserRolesByUserId(int userid) {
+        return em.createQuery("SELECT ur FROM UserRole ur WHERE ur.user.userid = :userid", UserRole.class)
+                .setParameter("userid", userid)
+                .getResultList();
+    }
+
+    public List<UserRole> findUserRolesByRoleId(int roleid) {
+        return em.createQuery("SELECT ur FROM UserRole ur WHERE ur.role.id = :roleid", UserRole.class)
+                .setParameter("roleid", roleid)
+                .getResultList();
+    }
+
+    public UserRole saveUserRole(UserRole userRole) {
+        if (userRole.getUserroleid() == 0) {
+            em.persist(userRole);
+            return userRole;
+        }
+        return em.merge(userRole);
+    }
+
+    public void deleteAllUserRoles() {
+        em.createQuery("DELETE FROM UserRole").executeUpdate();
     }
 }

@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.groceryapi.model.Role;
+import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.Users;
 import com.example.groceryapi.service.userService;
 
@@ -25,5 +26,12 @@ public class Controller {
     @GetMapping(value = "/roles", headers = "Accept=application/json")
     public List<Role> fetchRoles(@RequestParam(required = false) String department) {
         return userService.fetchRoles(department);
+    }
+
+    @GetMapping(value = "/userRoles", headers = "Accept=application/json")
+    public List<UserRole> fetchUserRoles(
+            @RequestParam(required = false) Integer userid,
+            @RequestParam(required = false) Integer roleid) {
+        return userService.fetchUserRoles(userid, roleid);
     }
 }

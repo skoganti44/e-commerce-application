@@ -14,7 +14,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static org.mockito.Mockito.never;
+
 import com.example.groceryapi.model.Role;
+import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.Users;
 import com.example.groceryapi.repository.Repository;
 import com.example.groceryapi.testdata.TestData;
@@ -123,5 +126,66 @@ public class userServiceTest {
         assertThat(returned.getFullName()).isEqualTo(expected.getFullName());
         assertThat(returned.getRole()).isEqualTo(expected.getRole());
         assertThat(returned.getDepartment()).isEqualTo(expected.getDepartment());
+    }
+
+    @Test
+    public void testFetchUserRoles_NullParams_ReturnsAll() {
+        when(repository.findAllUserRoles()).thenReturn(TestData.userRoles());
+
+        List<UserRole> result = userService.fetchUserRoles(null, null);
+
+        assertThat(result).hasSize(2);
+        verify(repository, times(1)).findAllUserRoles();
+        verify(repository, never()).findUserRolesByUserId(org.mockito.ArgumentMatchers.anyInt());
+        verify(repository, never()).findUserRolesByRoleId(org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    public void testFetchUserRoles_ByUserId() {
+        when(repository.findUserRolesByUserId(1)).thenReturn(List.of(TestData.johnAsManager()));
+
+        List<UserRole> result = userService.fetchUserRoles(1, null);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getUser().getname()).isEqualTo("John");
+        assertThat(result.get(0).getRole().getFullName()).isEqualTo("Joe Jonnas");
+        verify(repository, times(1)).findUserRolesByUserId(1);
+        verify(repository, never()).findAllUserRoles();
+        verify(repository, never()).findUserRolesByRoleId(org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    public void testFetchUserRoles_ByRoleId() {
+        when(repository.findUserRolesByRoleId(2)).thenReturn(List.of(TestData.janeAsEngineer()));
+
+        List<UserRole> result = userService.fetchUserRoles(null, 2);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getUser().getname()).isEqualTo("Jane");
+        assertThat(result.get(0).getRole().getFullName()).isEqualTo("Bob Johnson");
+        verify(repository, times(1)).findUserRolesByRoleId(2);
+        verify(repository, never()).findAllUserRoles();
+        verify(repository, never()).findUserRolesByUserId(org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    public void testFetchUserRoles_UserIdTakesPriorityOverRoleId() {
+        when(repository.findUserRolesByUserId(1)).thenReturn(List.of(TestData.johnAsManager()));
+
+        List<UserRole> result = userService.fetchUserRoles(1, 2);
+
+        assertThat(result).hasSize(1);
+        verify(repository, times(1)).findUserRolesByUserId(1);
+        verify(repository, never()).findUserRolesByRoleId(org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    public void testFetchUserRoles_ReturnsEmptyList() {
+        when(repository.findAllUserRoles()).thenReturn(Collections.emptyList());
+
+        List<UserRole> result = userService.fetchUserRoles(null, null);
+
+        assertThat(result).isEmpty();
+        verify(repository, times(1)).findAllUserRoles();
     }
 }

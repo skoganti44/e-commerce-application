@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import com.example.groceryapi.model.Role;
+import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.Users;
 
 public final class TestData {
@@ -84,5 +85,25 @@ public final class TestData {
 
     public static List<Role> rolesInFreshProducts() {
         return List.of(joeJonnas(), steveWooten());
+    }
+
+    public static UserRole userRole(int id, Users user, Role role) {
+        UserRole ur = new UserRole();
+        ur.setUserroleid(id);
+        ur.setUser(user);
+        ur.setRole(role);
+        return ur;
+    }
+
+    public static UserRole johnAsManager() {
+        return userRole(1, john(), joeJonnas());
+    }
+
+    public static UserRole janeAsEngineer() {
+        return userRole(2, jane(), bob());
+    }
+
+    public static List<UserRole> userRoles() {
+        return List.of(johnAsManager(), janeAsEngineer());
     }
 }
