@@ -2,6 +2,7 @@
 package com.example.groceryapi.controller;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -11,8 +12,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.groceryapi.dto.ProductRequest;
-import com.example.groceryapi.dto.ProductsRequest;
 import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
@@ -42,7 +41,7 @@ public class Controller {
     }
 
     @PostMapping(value = "/product", consumes = "application/json", produces = "application/json")
-    public ResponseEntity<List<Product>> saveProduct(@RequestBody ProductRequest request) {
+    public ResponseEntity<List<Product>> saveProduct(@RequestBody Map<String, Object> request) {
         try {
             return ResponseEntity.ok(userService.saveProduct(request));
         } catch (IllegalArgumentException e) {
@@ -51,7 +50,7 @@ public class Controller {
     }
 
     @PostMapping(value = "/products", consumes = "application/json", produces = "application/json")
-    public ResponseEntity<List<Product>> saveProducts(@RequestBody ProductsRequest request) {
+    public ResponseEntity<List<Product>> saveProducts(@RequestBody Map<String, Object> request) {
         try {
             return ResponseEntity.ok(userService.saveProducts(request));
         } catch (IllegalArgumentException e) {
