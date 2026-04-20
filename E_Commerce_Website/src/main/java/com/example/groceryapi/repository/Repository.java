@@ -20,11 +20,29 @@ import jakarta.persistence.PersistenceContext;
 @Transactional
 public class Repository {
 
+    private static final String SELECT_ALL_USERS = "SELECT u FROM Users u";
+    private static final String DELETE_ALL_USERS = "DELETE FROM Users";
+
+    private static final String SELECT_ALL_ROLES = "SELECT r FROM Role r";
+    private static final String SELECT_ROLES_BY_DEPARTMENT = "SELECT r FROM Role r WHERE r.department = :department";
+    private static final String DELETE_ALL_ROLES = "DELETE FROM Role";
+
+    private static final String SELECT_ALL_USER_ROLES = "SELECT ur FROM UserRole ur";
+    private static final String SELECT_USER_ROLES_BY_USER_ID = "SELECT ur FROM UserRole ur WHERE ur.user.userid = :userid";
+    private static final String SELECT_USER_ROLES_BY_ROLE_ID = "SELECT ur FROM UserRole ur WHERE ur.role.id = :roleid";
+    private static final String DELETE_ALL_USER_ROLES = "DELETE FROM UserRole";
+
+    private static final String SELECT_ALL_CATEGORIES = "SELECT c FROM Category c";
+
+    private static final String SELECT_ALL_PRODUCTS = "SELECT p FROM Product p";
+
+    private static final String SELECT_IMAGES_BY_PRODUCT_ID = "SELECT pi FROM ProductImage pi WHERE pi.product.id = :pid";
+
     @PersistenceContext
     private EntityManager em;
 
     public List<Users> findAllUsers() {
-        return em.createQuery("SELECT u FROM Users u", Users.class).getResultList();
+        return em.createQuery(SELECT_ALL_USERS, Users.class).getResultList();
     }
 
     public Optional<Users> findUserById(int id) {
@@ -47,15 +65,15 @@ public class Repository {
     }
 
     public void deleteAllUsers() {
-        em.createQuery("DELETE FROM Users").executeUpdate();
+        em.createQuery(DELETE_ALL_USERS).executeUpdate();
     }
 
     public List<Role> findAllRoles() {
-        return em.createQuery("SELECT r FROM Role r", Role.class).getResultList();
+        return em.createQuery(SELECT_ALL_ROLES, Role.class).getResultList();
     }
 
     public List<Role> findRolesByDepartment(String department) {
-        return em.createQuery("SELECT r FROM Role r WHERE r.department = :department", Role.class)
+        return em.createQuery(SELECT_ROLES_BY_DEPARTMENT, Role.class)
                 .setParameter("department", department)
                 .getResultList();
     }
@@ -80,21 +98,21 @@ public class Repository {
     }
 
     public void deleteAllRoles() {
-        em.createQuery("DELETE FROM Role").executeUpdate();
+        em.createQuery(DELETE_ALL_ROLES).executeUpdate();
     }
 
     public List<UserRole> findAllUserRoles() {
-        return em.createQuery("SELECT ur FROM UserRole ur", UserRole.class).getResultList();
+        return em.createQuery(SELECT_ALL_USER_ROLES, UserRole.class).getResultList();
     }
 
     public List<UserRole> findUserRolesByUserId(int userid) {
-        return em.createQuery("SELECT ur FROM UserRole ur WHERE ur.user.userid = :userid", UserRole.class)
+        return em.createQuery(SELECT_USER_ROLES_BY_USER_ID, UserRole.class)
                 .setParameter("userid", userid)
                 .getResultList();
     }
 
     public List<UserRole> findUserRolesByRoleId(int roleid) {
-        return em.createQuery("SELECT ur FROM UserRole ur WHERE ur.role.id = :roleid", UserRole.class)
+        return em.createQuery(SELECT_USER_ROLES_BY_ROLE_ID, UserRole.class)
                 .setParameter("roleid", roleid)
                 .getResultList();
     }
@@ -108,7 +126,7 @@ public class Repository {
     }
 
     public void deleteAllUserRoles() {
-        em.createQuery("DELETE FROM UserRole").executeUpdate();
+        em.createQuery(DELETE_ALL_USER_ROLES).executeUpdate();
     }
 
     public Category saveCategory(Category category) {
@@ -120,7 +138,7 @@ public class Repository {
     }
 
     public List<Category> findAllCategories() {
-        return em.createQuery("SELECT c FROM Category c", Category.class).getResultList();
+        return em.createQuery(SELECT_ALL_CATEGORIES, Category.class).getResultList();
     }
 
     public Product saveProduct(Product product) {
@@ -134,7 +152,7 @@ public class Repository {
     }
 
     public List<Product> findAllProducts() {
-        return em.createQuery("SELECT p FROM Product p", Product.class).getResultList();
+        return em.createQuery(SELECT_ALL_PRODUCTS, Product.class).getResultList();
     }
 
     public Optional<Product> findProductById(long id) {
@@ -150,7 +168,7 @@ public class Repository {
     }
 
     public List<ProductImage> findImagesByProductId(long productId) {
-        return em.createQuery("SELECT pi FROM ProductImage pi WHERE pi.product.id = :pid", ProductImage.class)
+        return em.createQuery(SELECT_IMAGES_BY_PRODUCT_ID, ProductImage.class)
                 .setParameter("pid", productId)
                 .getResultList();
     }
