@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.groceryapi.model.Payment;
 import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
@@ -57,6 +58,18 @@ public class Controller {
             return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/payments", headers = "Accept=application/json")
+    public ResponseEntity<?> fetchPayments(
+            @RequestParam int userid,
+            @RequestParam(required = false, defaultValue = "false") boolean includeAll) {
+        try {
+            List<Payment> payments = userService.fetchPaymentsByUserId(userid, includeAll);
+            return ResponseEntity.ok(payments);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
         }
     }
 

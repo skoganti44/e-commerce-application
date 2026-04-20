@@ -15,6 +15,7 @@ import com.example.groceryapi.model.CartItem;
 import com.example.groceryapi.model.Category;
 import com.example.groceryapi.model.OrderItem;
 import com.example.groceryapi.model.Orders;
+import com.example.groceryapi.model.Payment;
 import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.ProductImage;
 import com.example.groceryapi.model.Role;
@@ -51,6 +52,38 @@ public class userService {
         return Map.of(
                 "cart", carts,
                 "items", items);
+    }
+
+    public List<Payment> fetchPaymentsByUserId(int userid, boolean includeAll) {
+        repository.findUserById(userid)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userid));
+        List<Payment> payments = repository.findPaymentsByUserId(userid);
+        if (includeAll) {
+            return payments;
+        }
+        return filterOutFailedWhenSuccessExists(payments);
+    }
+
+    private List<Payment> filterOutFailedWhenSuccessExists(List<Payment> payments) {
+        java.util.Map<Long, List<Payment>> byOrder = new java.util.LinkedHashMap<>();
+        for (Payment p : payments) {
+            byOrder.computeIfAbsent(p.getOrder().getId(), k -> new ArrayList<>()).add(p);
+        }
+        List<Payment> result = new ArrayList<>();
+        for (List<Payment> group : byOrder.values()) {
+            boolean hasSuccess = group.stream()
+                    .anyMatch(p -> "SUCCESS".equalsIgnoreCase(p.getStatus()));
+            if (hasSuccess) {
+                for (Payment p : group) {
+                    if ("SUCCESS".equalsIgnoreCase(p.getStatus())) {
+                        result.add(p);
+                    }
+                }
+            } else {
+                result.addAll(group);
+            }
+        }
+        return result;
     }
 
     public Map<String, Object> fetchOrdersForCustomer(int userid) {

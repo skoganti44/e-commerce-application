@@ -16,6 +16,7 @@ import com.example.groceryapi.model.CartItem;
 import com.example.groceryapi.model.Category;
 import com.example.groceryapi.model.OrderItem;
 import com.example.groceryapi.model.Orders;
+import com.example.groceryapi.model.Payment;
 import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
@@ -427,6 +428,67 @@ public class RepositoryTest {
         Users user = repository.saveUser(TestData.newJohn());
 
         assertThat(repository.findRolesByUserId(user.getuserid())).isEmpty();
+    }
+
+    // ========== Payment — POSITIVE scenarios ==========
+
+    @Test
+    public void testSavePayment() {
+        Users user = repository.saveUser(TestData.newJohn());
+        Orders order = repository.saveOrder(TestData.newOrder(user, new BigDecimal("28.26"), "PLACED"));
+
+        Payment saved = repository.savePayment(
+                TestData.newPayment(order, "CREDIT_CARD", "SUCCESS", new BigDecimal("28.26")));
+
+        assertThat(saved.getId()).isNotNull();
+        assertThat(saved.getOrder().getId()).isEqualTo(order.getId());
+        assertThat(saved.getPaymentMethod()).isEqualTo("CREDIT_CARD");
+        assertThat(saved.getStatus()).isEqualTo("SUCCESS");
+        assertThat(saved.getAmount()).isEqualByComparingTo("28.26");
+    }
+
+    @Test
+    public void testFindPaymentsByUserId() {
+        Users user = repository.saveUser(TestData.newJohn());
+        Orders order = repository.saveOrder(TestData.newOrder(user, new BigDecimal("28.26"), "PLACED"));
+        repository.savePayment(TestData.newPayment(order, "CREDIT_CARD", "Decline", new BigDecimal("28.26")));
+        repository.savePayment(TestData.newPayment(order, "CREDIT_CARD", "SUCCESS", new BigDecimal("28.26")));
+
+        List<Payment> payments = repository.findPaymentsByUserId(user.getuserid());
+
+        assertThat(payments).hasSize(2);
+        assertThat(payments).extracting(Payment::getStatus)
+                .containsExactlyInAnyOrder("Decline", "SUCCESS");
+    }
+
+    @Test
+    public void testFindPaymentsByUserId_OnlyReturnsOwnersPayments() {
+        Users john = repository.saveUser(TestData.newJohn());
+        Users jane = repository.saveUser(TestData.newJane());
+        Orders johnOrder = repository.saveOrder(TestData.newOrder(john, new BigDecimal("10.00"), "PLACED"));
+        Orders janeOrder = repository.saveOrder(TestData.newOrder(jane, new BigDecimal("20.00"), "PLACED"));
+        repository.savePayment(TestData.newPayment(johnOrder, "CREDIT_CARD", "SUCCESS", new BigDecimal("10.00")));
+        repository.savePayment(TestData.newPayment(janeOrder, "CREDIT_CARD", "SUCCESS", new BigDecimal("20.00")));
+
+        List<Payment> johnsPayments = repository.findPaymentsByUserId(john.getuserid());
+
+        assertThat(johnsPayments).hasSize(1);
+        assertThat(johnsPayments.get(0).getAmount()).isEqualByComparingTo("10.00");
+    }
+
+    // ========== Payment — NEGATIVE scenarios ==========
+
+    @Test
+    public void testFindPaymentsByUserId_NoMatch() {
+        assertThat(repository.findPaymentsByUserId(999)).isEmpty();
+    }
+
+    @Test
+    public void testFindPaymentsByUserId_UserHasOrdersButNoPayments() {
+        Users user = repository.saveUser(TestData.newJohn());
+        repository.saveOrder(TestData.newOrder(user, new BigDecimal("10.00"), "PLACED"));
+
+        assertThat(repository.findPaymentsByUserId(user.getuserid())).isEmpty();
     }
 
     private Product persistProduct(String name, BigDecimal price, int stock) {

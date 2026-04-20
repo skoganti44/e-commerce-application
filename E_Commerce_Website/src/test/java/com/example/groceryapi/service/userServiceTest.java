@@ -1,11 +1,13 @@
 package com.example.groceryapi.service;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,8 +22,12 @@ import static org.mockito.Mockito.never;
 
 import com.example.groceryapi.model.Cart;
 import com.example.groceryapi.model.CartItem;
+import com.example.groceryapi.model.Category;
 import com.example.groceryapi.model.OrderItem;
 import com.example.groceryapi.model.Orders;
+import com.example.groceryapi.model.Payment;
+import com.example.groceryapi.model.Product;
+import com.example.groceryapi.model.ProductImage;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.Users;
@@ -358,5 +364,264 @@ public class userServiceTest {
 
         verify(repository, never()).findOrdersByUserId(org.mockito.ArgumentMatchers.anyInt());
         verify(repository, never()).findOrderItemsByUserId(org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    // ========== fetchPaymentsByUserId — POSITIVE scenarios ==========
+
+    @Test
+    public void testFetchPaymentsByUserId_IncludeAll_ReturnsAllPayments() {
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(TestData.john()));
+        when(repository.findPaymentsByUserId(1)).thenReturn(TestData.johnsPayments());
+
+        List<Payment> result = userService.fetchPaymentsByUserId(1, true);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getPaymentMethod()).isEqualTo("CREDIT_CARD");
+        assertThat(result.get(0).getStatus()).isEqualTo("Decline");
+        assertThat(result.get(1).getStatus()).isEqualTo("SUCCESS");
+        verify(repository, times(1)).findUserById(1);
+        verify(repository, times(1)).findPaymentsByUserId(1);
+    }
+
+    @Test
+    public void testFetchPaymentsByUserId_DefaultFilter_HidesFailedWhenSuccessExists() {
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(TestData.john()));
+        when(repository.findPaymentsByUserId(1)).thenReturn(TestData.johnsPayments());
+
+        List<Payment> result = userService.fetchPaymentsByUserId(1, false);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getStatus()).isEqualTo("SUCCESS");
+    }
+
+    @Test
+    public void testFetchPaymentsByUserId_DefaultFilter_NoSuccess_KeepsAll() {
+        Orders order = TestData.johnsOrder();
+        List<Payment> onlyFailed = List.of(
+                TestData.payment(1L, order, "CREDIT_CARD", "Decline", new java.math.BigDecimal("28.26")),
+                TestData.payment(2L, order, "CREDIT_CARD", "Pending", new java.math.BigDecimal("28.26")));
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(TestData.john()));
+        when(repository.findPaymentsByUserId(1)).thenReturn(onlyFailed);
+
+        List<Payment> result = userService.fetchPaymentsByUserId(1, false);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getStatus()).isEqualTo("Decline");
+        assertThat(result.get(1).getStatus()).isEqualTo("Pending");
+    }
+
+    @Test
+    public void testFetchPaymentsByUserId_DefaultFilter_MultipleOrders_FiltersPerOrder() {
+        Orders order1 = TestData.order(1L, TestData.john(), new java.math.BigDecimal("50.00"), "PLACED");
+        Orders order2 = TestData.order(2L, TestData.john(), new java.math.BigDecimal("30.00"), "PLACED");
+        List<Payment> mixed = List.of(
+                TestData.payment(1L, order1, "CREDIT_CARD", "Decline", new java.math.BigDecimal("50.00")),
+                TestData.payment(2L, order1, "CREDIT_CARD", "SUCCESS", new java.math.BigDecimal("50.00")),
+                TestData.payment(3L, order2, "CREDIT_CARD", "Pending", new java.math.BigDecimal("30.00")));
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(TestData.john()));
+        when(repository.findPaymentsByUserId(1)).thenReturn(mixed);
+
+        List<Payment> result = userService.fetchPaymentsByUserId(1, false);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getStatus()).isEqualTo("SUCCESS");
+        assertThat(result.get(1).getStatus()).isEqualTo("Pending");
+    }
+
+    @Test
+    public void testFetchPaymentsByUserId_UserHasNoPayments_ReturnsEmptyList() {
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(TestData.john()));
+        when(repository.findPaymentsByUserId(1)).thenReturn(Collections.emptyList());
+
+        List<Payment> result = userService.fetchPaymentsByUserId(1, false);
+
+        assertThat(result).isEmpty();
+    }
+
+    // ========== fetchPaymentsByUserId — NEGATIVE scenarios ==========
+
+    @Test
+    public void testFetchPaymentsByUserId_UserNotFound_ThrowsIllegalArgument() {
+        when(repository.findUserById(99)).thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> userService.fetchPaymentsByUserId(99, false))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("User not found: 99");
+
+        verify(repository, times(1)).findUserById(99);
+        verify(repository, never()).findPaymentsByUserId(org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    // ========== saveProduct — POSITIVE scenarios ==========
+
+    @Test
+    public void testSaveProduct_ValidRequest_ReturnsProduct() {
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(TestData.john()));
+        when(repository.saveCategory(any(Category.class))).thenAnswer(inv -> {
+            Category c = inv.getArgument(0);
+            c.setId(100L);
+            return c;
+        });
+        when(repository.saveProduct(any(Product.class))).thenAnswer(inv -> {
+            Product p = inv.getArgument(0);
+            p.setId(10L);
+            return p;
+        });
+        when(repository.saveProductImage(any(ProductImage.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Map<String, Object> request = Map.of(
+                "userId", 1,
+                "name", "Apple",
+                "description", "Fresh apple",
+                "items", List.of(Map.of(
+                        "category", Map.of("categoryName", "Fruits", "type", "Fresh"),
+                        "price", "2.00",
+                        "stock", 50,
+                        "imageUrl", "http://example.com/apple.jpg")));
+
+        List<Product> result = userService.saveProduct(request);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getName()).isEqualTo("Apple");
+        assertThat(result.get(0).getPrice()).isEqualByComparingTo("2.00");
+        assertThat(result.get(0).getStock()).isEqualTo(50);
+        assertThat(result.get(0).getCreatedBy().getname()).isEqualTo("John");
+        verify(repository, times(1)).findUserById(1);
+        verify(repository, times(1)).saveCategory(any(Category.class));
+        verify(repository, times(1)).saveProduct(any(Product.class));
+        verify(repository, times(1)).saveProductImage(any(ProductImage.class));
+    }
+
+    @Test
+    public void testSaveProduct_MultipleItems_ReturnsMultipleProducts() {
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(TestData.john()));
+        when(repository.saveCategory(any(Category.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(repository.saveProduct(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(repository.saveProductImage(any(ProductImage.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Map<String, Object> request = Map.of(
+                "userId", 1,
+                "name", "Apple",
+                "description", "Fresh apple",
+                "items", List.of(
+                        Map.of("category", Map.of("categoryName", "Fruits", "type", "Fresh"),
+                                "price", "2.00", "stock", 50, "imageUrl", "url1"),
+                        Map.of("category", Map.of("categoryName", "Fruits", "type", "Organic"),
+                                "price", "3.00", "stock", 30, "imageUrl", "url2")));
+
+        List<Product> result = userService.saveProduct(request);
+
+        assertThat(result).hasSize(2);
+        verify(repository, times(2)).saveCategory(any(Category.class));
+        verify(repository, times(2)).saveProduct(any(Product.class));
+        verify(repository, times(2)).saveProductImage(any(ProductImage.class));
+    }
+
+    // ========== saveProduct — NEGATIVE scenarios ==========
+
+    @Test
+    public void testSaveProduct_UserIdNull_ThrowsIllegalArgument() {
+        Map<String, Object> request = new HashMap<>();
+        request.put("name", "Apple");
+        request.put("description", "desc");
+        request.put("items", Collections.emptyList());
+
+        assertThatThrownBy(() -> userService.saveProduct(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("userId is required");
+
+        verify(repository, never()).findUserById(org.mockito.ArgumentMatchers.anyInt());
+        verify(repository, never()).saveProduct(any(Product.class));
+    }
+
+    @Test
+    public void testSaveProduct_UserNotFound_ThrowsIllegalArgument() {
+        when(repository.findUserById(99)).thenReturn(java.util.Optional.empty());
+
+        Map<String, Object> request = Map.of(
+                "userId", 99,
+                "name", "Apple",
+                "description", "desc",
+                "items", Collections.emptyList());
+
+        assertThatThrownBy(() -> userService.saveProduct(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("User not found: 99");
+
+        verify(repository, times(1)).findUserById(99);
+        verify(repository, never()).saveProduct(any(Product.class));
+    }
+
+    // ========== saveProducts — POSITIVE scenarios ==========
+
+    @Test
+    public void testSaveProducts_ValidRequest_MultipleProducts() {
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(TestData.john()));
+        when(repository.saveCategory(any(Category.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(repository.saveProduct(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(repository.saveProductImage(any(ProductImage.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Map<String, Object> request = Map.of(
+                "userId", 1,
+                "products", List.of(
+                        Map.of("name", "Apple", "description", "Fresh apple",
+                                "items", List.of(Map.of(
+                                        "category", Map.of("categoryName", "Fruits", "type", "Fresh"),
+                                        "price", "2.00", "stock", 50, "imageUrl", "url1"))),
+                        Map.of("name", "Milk", "description", "Fresh milk",
+                                "items", List.of(Map.of(
+                                        "category", Map.of("categoryName", "Dairy", "type", "Fresh"),
+                                        "price", "5.00", "stock", 30, "imageUrl", "url2")))));
+
+        List<Product> result = userService.saveProducts(request);
+
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(Product::getName).containsExactly("Apple", "Milk");
+        verify(repository, times(1)).findUserById(1);
+        verify(repository, times(2)).saveProduct(any(Product.class));
+    }
+
+    @Test
+    public void testSaveProducts_EmptyProductList_ReturnsEmpty() {
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(TestData.john()));
+
+        Map<String, Object> request = Map.of(
+                "userId", 1,
+                "products", Collections.emptyList());
+
+        List<Product> result = userService.saveProducts(request);
+
+        assertThat(result).isEmpty();
+        verify(repository, never()).saveProduct(any(Product.class));
+    }
+
+    // ========== saveProducts — NEGATIVE scenarios ==========
+
+    @Test
+    public void testSaveProducts_UserIdNull_ThrowsIllegalArgument() {
+        Map<String, Object> request = new HashMap<>();
+        request.put("products", Collections.emptyList());
+
+        assertThatThrownBy(() -> userService.saveProducts(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("userId is required");
+
+        verify(repository, never()).findUserById(org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    public void testSaveProducts_UserNotFound_ThrowsIllegalArgument() {
+        when(repository.findUserById(99)).thenReturn(java.util.Optional.empty());
+
+        Map<String, Object> request = Map.of(
+                "userId", 99,
+                "products", Collections.emptyList());
+
+        assertThatThrownBy(() -> userService.saveProducts(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("User not found: 99");
+
+        verify(repository, times(1)).findUserById(99);
+        verify(repository, never()).saveProduct(any(Product.class));
     }
 }

@@ -4,8 +4,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -287,5 +289,208 @@ public class ControllerTest {
     public void testFetchOrders_WithoutAcceptHeader_Returns406() throws Exception {
         mockMvc.perform(get("/orders").param("userid", "1").accept(MediaType.APPLICATION_XML))
                 .andExpect(status().isNotAcceptable());
+    }
+
+    // ========== /payments endpoint — POSITIVE scenarios ==========
+
+    @Test
+    public void testFetchPayments_DefaultFilter_ReturnsFilteredPayments() throws Exception {
+        when(userService.fetchPaymentsByUserId(1, false))
+                .thenReturn(List.of(TestData.johnsPayments().get(1)));
+
+        mockMvc.perform(get("/payments").param("userid", "1").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].status").value("SUCCESS"))
+                .andExpect(jsonPath("$[0].paymentMethod").value("CREDIT_CARD"))
+                .andExpect(jsonPath("$[0].amount").value(28.26))
+                .andExpect(jsonPath("$[0].order.id").value(1));
+    }
+
+    @Test
+    public void testFetchPayments_IncludeAllTrue_ReturnsAllPayments() throws Exception {
+        when(userService.fetchPaymentsByUserId(1, true)).thenReturn(TestData.johnsPayments());
+
+        mockMvc.perform(get("/payments")
+                        .param("userid", "1")
+                        .param("includeAll", "true")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].status").value("Decline"))
+                .andExpect(jsonPath("$[1].status").value("SUCCESS"));
+    }
+
+    @Test
+    public void testFetchPayments_UserHasNoPayments_ReturnsEmptyList() throws Exception {
+        when(userService.fetchPaymentsByUserId(1, false)).thenReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/payments").param("userid", "1").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    // ========== /payments endpoint — NEGATIVE scenarios ==========
+
+    @Test
+    public void testFetchPayments_UserNotFound_Returns404() throws Exception {
+        when(userService.fetchPaymentsByUserId(99, false))
+                .thenThrow(new IllegalArgumentException("User not found: 99"));
+
+        mockMvc.perform(get("/payments").param("userid", "99").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("User not found: 99"));
+    }
+
+    @Test
+    public void testFetchPayments_MissingUseridParam_Returns400() throws Exception {
+        mockMvc.perform(get("/payments").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void testFetchPayments_InvalidUseridFormat_Returns400() throws Exception {
+        mockMvc.perform(get("/payments").param("userid", "abc").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void testFetchPayments_WithoutAcceptHeader_Returns406() throws Exception {
+        mockMvc.perform(get("/payments").param("userid", "1").accept(MediaType.APPLICATION_XML))
+                .andExpect(status().isNotAcceptable());
+    }
+
+    // ========== POST /product — POSITIVE scenarios ==========
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testSaveProduct_ValidRequest_Returns200() throws Exception {
+        when(userService.saveProduct(any(Map.class))).thenReturn(List.of(TestData.apple()));
+
+        String body = "{" +
+                "\"userId\":1," +
+                "\"name\":\"Apple\"," +
+                "\"description\":\"Fresh apple\"," +
+                "\"items\":[{" +
+                "\"category\":{\"categoryName\":\"Fruits\",\"type\":\"Fresh\"}," +
+                "\"price\":\"2.00\",\"stock\":50,\"imageUrl\":\"http://example.com/a.jpg\"" +
+                "}]}";
+
+        mockMvc.perform(post("/product")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].name").value("Apple"))
+                .andExpect(jsonPath("$[0].price").value(2.00))
+                .andExpect(jsonPath("$[0].stock").value(50));
+    }
+
+    // ========== POST /product — NEGATIVE scenarios ==========
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testSaveProduct_UserIdNull_Returns400() throws Exception {
+        when(userService.saveProduct(any(Map.class)))
+                .thenThrow(new IllegalArgumentException("userId is required"));
+
+        mockMvc.perform(post("/product")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Apple\",\"description\":\"d\",\"items\":[]}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testSaveProduct_UserNotFound_Returns400() throws Exception {
+        when(userService.saveProduct(any(Map.class)))
+                .thenThrow(new IllegalArgumentException("User not found: 99"));
+
+        mockMvc.perform(post("/product")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":99,\"name\":\"Apple\",\"description\":\"d\",\"items\":[]}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void testSaveProduct_MissingBody_Returns400() throws Exception {
+        mockMvc.perform(post("/product")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void testSaveProduct_UnsupportedMediaType_Returns415() throws Exception {
+        mockMvc.perform(post("/product")
+                        .contentType(MediaType.APPLICATION_XML)
+                        .content("<product/>"))
+                .andExpect(status().isUnsupportedMediaType());
+    }
+
+    // ========== POST /products — POSITIVE scenarios ==========
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testSaveProducts_ValidRequest_Returns200() throws Exception {
+        when(userService.saveProducts(any(Map.class)))
+                .thenReturn(List.of(TestData.apple(), TestData.milk()));
+
+        String body = "{\"userId\":1,\"products\":[" +
+                "{\"name\":\"Apple\",\"description\":\"d\",\"items\":[" +
+                "{\"category\":{\"categoryName\":\"Fruits\",\"type\":\"Fresh\"}," +
+                "\"price\":\"2.00\",\"stock\":50,\"imageUrl\":\"u1\"}]}," +
+                "{\"name\":\"Milk\",\"description\":\"d\",\"items\":[" +
+                "{\"category\":{\"categoryName\":\"Dairy\",\"type\":\"Fresh\"}," +
+                "\"price\":\"5.26\",\"stock\":30,\"imageUrl\":\"u2\"}]}" +
+                "]}";
+
+        mockMvc.perform(post("/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].name").value("Apple"))
+                .andExpect(jsonPath("$[1].name").value("Milk"));
+    }
+
+    // ========== POST /products — NEGATIVE scenarios ==========
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testSaveProducts_UserIdNull_Returns400() throws Exception {
+        when(userService.saveProducts(any(Map.class)))
+                .thenThrow(new IllegalArgumentException("userId is required"));
+
+        mockMvc.perform(post("/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"products\":[]}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testSaveProducts_UserNotFound_Returns400() throws Exception {
+        when(userService.saveProducts(any(Map.class)))
+                .thenThrow(new IllegalArgumentException("User not found: 99"));
+
+        mockMvc.perform(post("/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":99,\"products\":[]}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void testSaveProducts_MissingBody_Returns400() throws Exception {
+        mockMvc.perform(post("/products")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void testSaveProducts_UnsupportedMediaType_Returns415() throws Exception {
+        mockMvc.perform(post("/products")
+                        .contentType(MediaType.APPLICATION_XML)
+                        .content("<products/>"))
+                .andExpect(status().isUnsupportedMediaType());
     }
 }

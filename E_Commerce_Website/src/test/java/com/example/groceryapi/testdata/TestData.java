@@ -9,6 +9,7 @@ import com.example.groceryapi.model.CartItem;
 import com.example.groceryapi.model.Category;
 import com.example.groceryapi.model.OrderItem;
 import com.example.groceryapi.model.Orders;
+import com.example.groceryapi.model.Payment;
 import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
@@ -241,5 +242,31 @@ public final class TestData {
                 orderItem(1L, order, apple(), 2, new BigDecimal("2.00")),
                 orderItem(2L, order, milk(), 6, new BigDecimal("5.26")),
                 orderItem(3L, order, bread(), 4, new BigDecimal("1.00")));
+    }
+
+    public static Payment payment(Long id, Orders order, String method, String status, BigDecimal amount) {
+        Payment p = new Payment();
+        p.setId(id);
+        p.setOrder(order);
+        p.setPaymentMethod(method);
+        p.setStatus(status);
+        p.setAmount(amount);
+        return p;
+    }
+
+    public static Payment newPayment(Orders order, String method, String status, BigDecimal amount) {
+        Payment p = new Payment();
+        p.setOrder(order);
+        p.setPaymentMethod(method);
+        p.setStatus(status);
+        p.setAmount(amount);
+        return p;
+    }
+
+    public static List<Payment> johnsPayments() {
+        Orders order = johnsOrder();
+        return List.of(
+                payment(1L, order, "CREDIT_CARD", "Decline", new BigDecimal("28.26")),
+                payment(2L, order, "CREDIT_CARD", "SUCCESS", new BigDecimal("28.26")));
     }
 }

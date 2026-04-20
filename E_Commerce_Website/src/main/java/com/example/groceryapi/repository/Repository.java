@@ -11,6 +11,7 @@ import com.example.groceryapi.model.CartItem;
 import com.example.groceryapi.model.Category;
 import com.example.groceryapi.model.OrderItem;
 import com.example.groceryapi.model.Orders;
+import com.example.groceryapi.model.Payment;
 import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.ProductImage;
 import com.example.groceryapi.model.Role;
@@ -48,6 +49,8 @@ public class Repository {
     private static final String SELECT_ORDERS_BY_USER_ID = "SELECT o FROM Orders o WHERE o.user.userid = :userid";
     private static final String SELECT_ORDER_ITEMS_BY_USER_ID = "SELECT oi FROM OrderItem oi WHERE oi.order.user.userid = :userid";
     private static final String SELECT_ROLES_BY_USER_ID = "SELECT ur.role FROM UserRole ur WHERE ur.user.userid = :userid";
+
+    private static final String SELECT_PAYMENTS_BY_USER_ID = "SELECT p FROM Payment p WHERE p.order.user.userid = :userid";
 
     @PersistenceContext
     private EntityManager em;
@@ -242,6 +245,20 @@ public class Repository {
 
     public List<Role> findRolesByUserId(int userid) {
         return em.createQuery(SELECT_ROLES_BY_USER_ID, Role.class)
+                .setParameter("userid", userid)
+                .getResultList();
+    }
+
+    public Payment savePayment(Payment payment) {
+        if (payment.getId() == null) {
+            em.persist(payment);
+            return payment;
+        }
+        return em.merge(payment);
+    }
+
+    public List<Payment> findPaymentsByUserId(int userid) {
+        return em.createQuery(SELECT_PAYMENTS_BY_USER_ID, Payment.class)
                 .setParameter("userid", userid)
                 .getResultList();
     }
