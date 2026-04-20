@@ -215,4 +215,77 @@ public class ControllerTest {
         mockMvc.perform(get("/cart").param("userid", "1").accept(MediaType.APPLICATION_XML))
                 .andExpect(status().isNotAcceptable());
     }
+
+    // ========== /orders endpoint — POSITIVE scenarios ==========
+
+    @Test
+    public void testFetchOrders_CustomerWithOrders_Returns200() throws Exception {
+        when(userService.fetchOrdersForCustomer(1)).thenReturn(Map.of(
+                "orders", List.of(TestData.johnsOrder()),
+                "items", TestData.johnsOrderItems()));
+
+        mockMvc.perform(get("/orders").param("userid", "1").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orders.length()").value(1))
+                .andExpect(jsonPath("$.orders[0].id").value(1))
+                .andExpect(jsonPath("$.orders[0].status").value("PLACED"))
+                .andExpect(jsonPath("$.orders[0].totalAmount").value(1049.99))
+                .andExpect(jsonPath("$.orders[0].user.name").value("John"))
+                .andExpect(jsonPath("$.items.length()").value(3))
+                .andExpect(jsonPath("$.items[0].product.name").value("Apple"))
+                .andExpect(jsonPath("$.items[0].quantity").value(2))
+                .andExpect(jsonPath("$.items[0].price").value(2.00));
+    }
+
+    @Test
+    public void testFetchOrders_CustomerWithNoOrders_Returns200EmptyArrays() throws Exception {
+        when(userService.fetchOrdersForCustomer(1)).thenReturn(Map.of(
+                "orders", Collections.emptyList(),
+                "items", Collections.emptyList()));
+
+        mockMvc.perform(get("/orders").param("userid", "1").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orders.length()").value(0))
+                .andExpect(jsonPath("$.items.length()").value(0));
+    }
+
+    // ========== /orders endpoint — NEGATIVE scenarios ==========
+
+    @Test
+    public void testFetchOrders_UserNotFound_Returns404() throws Exception {
+        when(userService.fetchOrdersForCustomer(99))
+                .thenThrow(new IllegalArgumentException("User not found: 99"));
+
+        mockMvc.perform(get("/orders").param("userid", "99").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("User not found: 99"));
+    }
+
+    @Test
+    public void testFetchOrders_UserNotCustomer_Returns403() throws Exception {
+        when(userService.fetchOrdersForCustomer(2))
+                .thenThrow(new SecurityException("User 2 is not a customer"));
+
+        mockMvc.perform(get("/orders").param("userid", "2").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("User 2 is not a customer"));
+    }
+
+    @Test
+    public void testFetchOrders_MissingUseridParam_Returns400() throws Exception {
+        mockMvc.perform(get("/orders").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void testFetchOrders_InvalidUseridFormat_Returns400() throws Exception {
+        mockMvc.perform(get("/orders").param("userid", "abc").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void testFetchOrders_WithoutAcceptHeader_Returns406() throws Exception {
+        mockMvc.perform(get("/orders").param("userid", "1").accept(MediaType.APPLICATION_XML))
+                .andExpect(status().isNotAcceptable());
+    }
 }

@@ -49,6 +49,17 @@ public class Controller {
         }
     }
 
+    @GetMapping(value = "/orders", headers = "Accept=application/json")
+    public ResponseEntity<Map<String, Object>> fetchOrders(@RequestParam int userid) {
+        try {
+            return ResponseEntity.ok(userService.fetchOrdersForCustomer(userid));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PostMapping(value = "/product", consumes = "application/json", produces = "application/json")
     public ResponseEntity<List<Product>> saveProduct(@RequestBody Map<String, Object> request) {
         try {

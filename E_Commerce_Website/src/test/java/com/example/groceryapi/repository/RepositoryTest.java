@@ -14,6 +14,8 @@ import org.springframework.context.annotation.Import;
 import com.example.groceryapi.model.Cart;
 import com.example.groceryapi.model.CartItem;
 import com.example.groceryapi.model.Category;
+import com.example.groceryapi.model.OrderItem;
+import com.example.groceryapi.model.Orders;
 import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
@@ -304,6 +306,127 @@ public class RepositoryTest {
         List<CartItem> items = repository.findCartItemsByUserId(user.getuserid());
 
         assertThat(items).isEmpty();
+    }
+
+    // ========== Orders / OrderItem — POSITIVE scenarios ==========
+
+    @Test
+    public void testSaveOrder() {
+        Users user = repository.saveUser(TestData.newJohn());
+
+        Orders saved = repository.saveOrder(TestData.newOrder(user, new BigDecimal("1049.99"), "PLACED"));
+
+        assertThat(saved.getId()).isNotNull();
+        assertThat(saved.getUser().getname()).isEqualTo("John");
+        assertThat(saved.getTotalAmount()).isEqualByComparingTo("1049.99");
+        assertThat(saved.getStatus()).isEqualTo("PLACED");
+    }
+
+    @Test
+    public void testFindOrdersByUserId() {
+        Users john = repository.saveUser(TestData.newJohn());
+        Users jane = repository.saveUser(TestData.newJane());
+        repository.saveOrder(TestData.newOrder(john, new BigDecimal("100.00"), "PLACED"));
+        repository.saveOrder(TestData.newOrder(jane, new BigDecimal("200.00"), "PLACED"));
+
+        List<Orders> orders = repository.findOrdersByUserId(john.getuserid());
+
+        assertThat(orders).hasSize(1);
+        assertThat(orders.get(0).getUser().getname()).isEqualTo("John");
+    }
+
+    @Test
+    public void testSaveOrderItem() {
+        Users user = repository.saveUser(TestData.newJohn());
+        Orders order = repository.saveOrder(TestData.newOrder(user, new BigDecimal("10.00"), "PLACED"));
+        Product product = persistProduct("Apple", new BigDecimal("2.00"), 50);
+
+        OrderItem saved = repository.saveOrderItem(
+                TestData.newOrderItem(order, product, 2, new BigDecimal("2.00")));
+
+        assertThat(saved.getId()).isNotNull();
+        assertThat(saved.getOrder().getId()).isEqualTo(order.getId());
+        assertThat(saved.getProduct().getName()).isEqualTo("Apple");
+        assertThat(saved.getQuantity()).isEqualTo(2);
+        assertThat(saved.getPrice()).isEqualByComparingTo("2.00");
+    }
+
+    @Test
+    public void testFindOrderItemsByUserId() {
+        Users user = repository.saveUser(TestData.newJohn());
+        Orders order = repository.saveOrder(TestData.newOrder(user, new BigDecimal("50.00"), "PLACED"));
+        Product apple = persistProduct("Apple", new BigDecimal("2.00"), 50);
+        Product milk = persistProduct("Milk", new BigDecimal("5.26"), 30);
+        repository.saveOrderItem(TestData.newOrderItem(order, apple, 2, new BigDecimal("2.00")));
+        repository.saveOrderItem(TestData.newOrderItem(order, milk, 6, new BigDecimal("5.26")));
+
+        List<OrderItem> items = repository.findOrderItemsByUserId(user.getuserid());
+
+        assertThat(items).hasSize(2);
+        assertThat(items).extracting(oi -> oi.getProduct().getName())
+                .containsExactlyInAnyOrder("Apple", "Milk");
+    }
+
+    @Test
+    public void testFindOrderItemsByUserId_OnlyReturnsOwnersItems() {
+        Users john = repository.saveUser(TestData.newJohn());
+        Users jane = repository.saveUser(TestData.newJane());
+        Orders johnOrder = repository.saveOrder(TestData.newOrder(john, new BigDecimal("10.00"), "PLACED"));
+        Orders janeOrder = repository.saveOrder(TestData.newOrder(jane, new BigDecimal("20.00"), "PLACED"));
+        Product apple = persistProduct("Apple", new BigDecimal("2.00"), 50);
+        repository.saveOrderItem(TestData.newOrderItem(johnOrder, apple, 2, new BigDecimal("2.00")));
+        repository.saveOrderItem(TestData.newOrderItem(janeOrder, apple, 10, new BigDecimal("2.00")));
+
+        List<OrderItem> johnsItems = repository.findOrderItemsByUserId(john.getuserid());
+
+        assertThat(johnsItems).hasSize(1);
+        assertThat(johnsItems.get(0).getQuantity()).isEqualTo(2);
+    }
+
+    @Test
+    public void testFindRolesByUserId() {
+        Users user = repository.saveUser(TestData.newJohn());
+        Role customer = repository.saveRole(newRole("John Cust", "customer", TestData.SALES));
+        repository.saveUserRole(newUserRole(user, customer));
+
+        List<Role> roles = repository.findRolesByUserId(user.getuserid());
+
+        assertThat(roles).hasSize(1);
+        assertThat(roles.get(0).getRole()).isEqualTo("customer");
+    }
+
+    @Test
+    public void testFindRolesByUserId_MultipleRoles() {
+        Users user = repository.saveUser(TestData.newJohn());
+        Role manager = repository.saveRole(newRole("John Mgr", "Manager", TestData.SALES));
+        Role customer = repository.saveRole(newRole("John Cust", "customer", TestData.SALES));
+        repository.saveUserRole(newUserRole(user, manager));
+        repository.saveUserRole(newUserRole(user, customer));
+
+        List<Role> roles = repository.findRolesByUserId(user.getuserid());
+
+        assertThat(roles).hasSize(2);
+        assertThat(roles).extracting(Role::getRole)
+                .containsExactlyInAnyOrder("Manager", "customer");
+    }
+
+    // ========== Orders / OrderItem — NEGATIVE scenarios ==========
+
+    @Test
+    public void testFindOrdersByUserId_NoMatch() {
+        assertThat(repository.findOrdersByUserId(999)).isEmpty();
+    }
+
+    @Test
+    public void testFindOrderItemsByUserId_NoMatch() {
+        assertThat(repository.findOrderItemsByUserId(999)).isEmpty();
+    }
+
+    @Test
+    public void testFindRolesByUserId_NoRoles() {
+        Users user = repository.saveUser(TestData.newJohn());
+
+        assertThat(repository.findRolesByUserId(user.getuserid())).isEmpty();
     }
 
     private Product persistProduct(String name, BigDecimal price, int stock) {

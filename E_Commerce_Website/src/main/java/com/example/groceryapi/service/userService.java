@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import com.example.groceryapi.model.Cart;
 import com.example.groceryapi.model.CartItem;
 import com.example.groceryapi.model.Category;
+import com.example.groceryapi.model.OrderItem;
+import com.example.groceryapi.model.Orders;
 import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.ProductImage;
 import com.example.groceryapi.model.Role;
@@ -48,6 +50,24 @@ public class userService {
         List<CartItem> items = repository.findCartItemsByUserId(userid);
         return Map.of(
                 "cart", carts,
+                "items", items);
+    }
+
+    public Map<String, Object> fetchOrdersForCustomer(int userid) {
+        repository.findUserById(userid)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userid));
+
+        List<Role> roles = repository.findRolesByUserId(userid);
+        boolean isCustomer = roles.stream()
+                .anyMatch(r -> r.getRole() != null && r.getRole().equalsIgnoreCase("customer"));
+        if (!isCustomer) {
+            throw new SecurityException("User " + userid + " is not a customer");
+        }
+
+        List<Orders> orders = repository.findOrdersByUserId(userid);
+        List<OrderItem> items = repository.findOrderItemsByUserId(userid);
+        return Map.of(
+                "orders", orders,
                 "items", items);
     }
 

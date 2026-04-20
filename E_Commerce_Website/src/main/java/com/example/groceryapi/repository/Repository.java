@@ -9,6 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.example.groceryapi.model.Cart;
 import com.example.groceryapi.model.CartItem;
 import com.example.groceryapi.model.Category;
+import com.example.groceryapi.model.OrderItem;
+import com.example.groceryapi.model.Orders;
 import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.ProductImage;
 import com.example.groceryapi.model.Role;
@@ -42,6 +44,10 @@ public class Repository {
 
     private static final String SELECT_CART_BY_USER_ID = "SELECT c FROM Cart c WHERE c.user.userid = :userid";
     private static final String SELECT_CART_ITEMS_BY_USER_ID = "SELECT ci FROM CartItem ci WHERE ci.cart.user.userid = :userid";
+
+    private static final String SELECT_ORDERS_BY_USER_ID = "SELECT o FROM Orders o WHERE o.user.userid = :userid";
+    private static final String SELECT_ORDER_ITEMS_BY_USER_ID = "SELECT oi FROM OrderItem oi WHERE oi.order.user.userid = :userid";
+    private static final String SELECT_ROLES_BY_USER_ID = "SELECT ur.role FROM UserRole ur WHERE ur.user.userid = :userid";
 
     @PersistenceContext
     private EntityManager em;
@@ -202,6 +208,40 @@ public class Repository {
 
     public List<CartItem> findCartItemsByUserId(int userid) {
         return em.createQuery(SELECT_CART_ITEMS_BY_USER_ID, CartItem.class)
+                .setParameter("userid", userid)
+                .getResultList();
+    }
+
+    public Orders saveOrder(Orders order) {
+        if (order.getId() == null) {
+            em.persist(order);
+            return order;
+        }
+        return em.merge(order);
+    }
+
+    public OrderItem saveOrderItem(OrderItem item) {
+        if (item.getId() == null) {
+            em.persist(item);
+            return item;
+        }
+        return em.merge(item);
+    }
+
+    public List<Orders> findOrdersByUserId(int userid) {
+        return em.createQuery(SELECT_ORDERS_BY_USER_ID, Orders.class)
+                .setParameter("userid", userid)
+                .getResultList();
+    }
+
+    public List<OrderItem> findOrderItemsByUserId(int userid) {
+        return em.createQuery(SELECT_ORDER_ITEMS_BY_USER_ID, OrderItem.class)
+                .setParameter("userid", userid)
+                .getResultList();
+    }
+
+    public List<Role> findRolesByUserId(int userid) {
+        return em.createQuery(SELECT_ROLES_BY_USER_ID, Role.class)
                 .setParameter("userid", userid)
                 .getResultList();
     }

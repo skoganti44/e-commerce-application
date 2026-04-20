@@ -7,6 +7,8 @@ import java.util.List;
 import com.example.groceryapi.model.Cart;
 import com.example.groceryapi.model.CartItem;
 import com.example.groceryapi.model.Category;
+import com.example.groceryapi.model.OrderItem;
+import com.example.groceryapi.model.Orders;
 import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
@@ -183,5 +185,61 @@ public final class TestData {
                 cartItem(1L, cart, apple(), 3),
                 cartItem(2L, cart, milk(), 6),
                 cartItem(3L, cart, bread(), 10));
+    }
+
+    public static Role customerRole() {
+        return role(10, "Customer One", "customer", SALES);
+    }
+
+    public static Role managerRole() {
+        return role(11, "Manager One", "Manager", SALES);
+    }
+
+    public static Orders order(Long id, Users user, BigDecimal totalAmount, String status) {
+        Orders o = new Orders();
+        o.setId(id);
+        o.setUser(user);
+        o.setTotalAmount(totalAmount);
+        o.setStatus(status);
+        return o;
+    }
+
+    public static Orders newOrder(Users user, BigDecimal totalAmount, String status) {
+        Orders o = new Orders();
+        o.setUser(user);
+        o.setTotalAmount(totalAmount);
+        o.setStatus(status);
+        return o;
+    }
+
+    public static Orders johnsOrder() {
+        return order(1L, john(), new BigDecimal("1049.99"), "PLACED");
+    }
+
+    public static OrderItem orderItem(Long id, Orders order, Product product, Integer quantity, BigDecimal price) {
+        OrderItem oi = new OrderItem();
+        oi.setId(id);
+        oi.setOrder(order);
+        oi.setProduct(product);
+        oi.setQuantity(quantity);
+        oi.setPrice(price);
+        return oi;
+    }
+
+    public static OrderItem newOrderItem(Orders order, Product product, Integer quantity, BigDecimal price) {
+        OrderItem oi = new OrderItem();
+        oi.setOrder(order);
+        oi.setProduct(product);
+        oi.setQuantity(quantity);
+        oi.setPrice(price);
+        return oi;
+    }
+
+    public static List<OrderItem> johnsOrderItems() {
+        Orders order = johnsOrder();
+        return List.of(
+                orderItem(1L, order, apple(), 2, new BigDecimal("2.00")),
+                orderItem(2L, order, milk(), 6, new BigDecimal("5.26")),
+                orderItem(3L, order, bread(), 4, new BigDecimal("1.00")));
     }
 }

@@ -20,6 +20,8 @@ import static org.mockito.Mockito.never;
 
 import com.example.groceryapi.model.Cart;
 import com.example.groceryapi.model.CartItem;
+import com.example.groceryapi.model.OrderItem;
+import com.example.groceryapi.model.Orders;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.Users;
@@ -254,5 +256,107 @@ public class userServiceTest {
 
         verify(repository, times(1)).findCartsByUserId(99);
         verify(repository, never()).findCartItemsByUserId(org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    // ========== fetchOrdersForCustomer — POSITIVE scenarios ==========
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testFetchOrdersForCustomer_ValidCustomer_ReturnsOrdersAndItems() {
+        Users john = TestData.john();
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(john));
+        when(repository.findRolesByUserId(1)).thenReturn(List.of(TestData.customerRole()));
+        when(repository.findOrdersByUserId(1)).thenReturn(List.of(TestData.johnsOrder()));
+        when(repository.findOrderItemsByUserId(1)).thenReturn(TestData.johnsOrderItems());
+
+        Map<String, Object> result = userService.fetchOrdersForCustomer(1);
+
+        assertThat(result).containsKeys("orders", "items");
+        assertThat((List<Orders>) result.get("orders")).hasSize(1);
+        assertThat((List<OrderItem>) result.get("items")).hasSize(3);
+        verify(repository, times(1)).findUserById(1);
+        verify(repository, times(1)).findRolesByUserId(1);
+        verify(repository, times(1)).findOrdersByUserId(1);
+        verify(repository, times(1)).findOrderItemsByUserId(1);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testFetchOrdersForCustomer_CustomerWithNoOrders_ReturnsEmptyArrays() {
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(TestData.john()));
+        when(repository.findRolesByUserId(1)).thenReturn(List.of(TestData.customerRole()));
+        when(repository.findOrdersByUserId(1)).thenReturn(Collections.emptyList());
+        when(repository.findOrderItemsByUserId(1)).thenReturn(Collections.emptyList());
+
+        Map<String, Object> result = userService.fetchOrdersForCustomer(1);
+
+        assertThat((List<Orders>) result.get("orders")).isEmpty();
+        assertThat((List<OrderItem>) result.get("items")).isEmpty();
+    }
+
+    @Test
+    public void testFetchOrdersForCustomer_RoleMatchIsCaseInsensitive() {
+        Role customerUpper = TestData.role(99, "Jane", "CUSTOMER", TestData.SALES);
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(TestData.john()));
+        when(repository.findRolesByUserId(1)).thenReturn(List.of(customerUpper));
+        when(repository.findOrdersByUserId(1)).thenReturn(Collections.emptyList());
+        when(repository.findOrderItemsByUserId(1)).thenReturn(Collections.emptyList());
+
+        Map<String, Object> result = userService.fetchOrdersForCustomer(1);
+
+        assertThat(result).containsKeys("orders", "items");
+    }
+
+    @Test
+    public void testFetchOrdersForCustomer_OneOfMultipleRolesIsCustomer_Allowed() {
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(TestData.john()));
+        when(repository.findRolesByUserId(1)).thenReturn(
+                List.of(TestData.managerRole(), TestData.customerRole()));
+        when(repository.findOrdersByUserId(1)).thenReturn(Collections.emptyList());
+        when(repository.findOrderItemsByUserId(1)).thenReturn(Collections.emptyList());
+
+        Map<String, Object> result = userService.fetchOrdersForCustomer(1);
+
+        assertThat(result).containsKeys("orders", "items");
+    }
+
+    // ========== fetchOrdersForCustomer — NEGATIVE scenarios ==========
+
+    @Test
+    public void testFetchOrdersForCustomer_UserNotFound_ThrowsIllegalArgument() {
+        when(repository.findUserById(99)).thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> userService.fetchOrdersForCustomer(99))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("User not found: 99");
+
+        verify(repository, times(1)).findUserById(99);
+        verify(repository, never()).findRolesByUserId(org.mockito.ArgumentMatchers.anyInt());
+        verify(repository, never()).findOrdersByUserId(org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    public void testFetchOrdersForCustomer_UserHasNoRoles_ThrowsSecurityException() {
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(TestData.john()));
+        when(repository.findRolesByUserId(1)).thenReturn(Collections.emptyList());
+
+        assertThatThrownBy(() -> userService.fetchOrdersForCustomer(1))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("is not a customer");
+
+        verify(repository, never()).findOrdersByUserId(org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    public void testFetchOrdersForCustomer_UserIsNotCustomer_ThrowsSecurityException() {
+        when(repository.findUserById(2)).thenReturn(java.util.Optional.of(TestData.jane()));
+        when(repository.findRolesByUserId(2)).thenReturn(List.of(TestData.managerRole()));
+
+        assertThatThrownBy(() -> userService.fetchOrdersForCustomer(2))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("User 2 is not a customer");
+
+        verify(repository, never()).findOrdersByUserId(org.mockito.ArgumentMatchers.anyInt());
+        verify(repository, never()).findOrderItemsByUserId(org.mockito.ArgumentMatchers.anyInt());
     }
 }
