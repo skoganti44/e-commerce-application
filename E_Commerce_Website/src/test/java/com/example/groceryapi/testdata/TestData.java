@@ -11,6 +11,7 @@ import com.example.groceryapi.model.OrderItem;
 import com.example.groceryapi.model.Orders;
 import com.example.groceryapi.model.Payment;
 import com.example.groceryapi.model.Product;
+import com.example.groceryapi.model.ProductAvailable;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.Users;
@@ -261,6 +262,18 @@ public final class TestData {
         p.setStatus(status);
         p.setAmount(amount);
         return p;
+    }
+
+    public static ProductAvailable newProductAvailable(Product p, Users creator, String imageUrl) {
+        ProductAvailable pa = new ProductAvailable();
+        pa.setName(p.getName());
+        pa.setDescription(p.getDescription());
+        pa.setPrice(p.getPrice());
+        pa.setStock(p.getStock());
+        pa.setCategory(p.getCategory());
+        pa.setCreatedBy(creator);
+        pa.setImageUrl(imageUrl);
+        return pa;
     }
 
     public static List<Payment> johnsPayments() {

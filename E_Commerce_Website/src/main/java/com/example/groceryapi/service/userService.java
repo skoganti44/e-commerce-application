@@ -10,6 +10,10 @@ import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import com.example.groceryapi.model.Cart;
 import com.example.groceryapi.model.CartItem;
 import com.example.groceryapi.model.Category;
@@ -17,6 +21,7 @@ import com.example.groceryapi.model.OrderItem;
 import com.example.groceryapi.model.Orders;
 import com.example.groceryapi.model.Payment;
 import com.example.groceryapi.model.Product;
+import com.example.groceryapi.model.ProductAvailable;
 import com.example.groceryapi.model.ProductImage;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
@@ -141,6 +146,59 @@ public class userService {
         }
         return repository.findUserById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+    }
+
+    public Map<String, Object> cleanupForUser(int userid) {
+        repository.findUserById(userid)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userid));
+
+        List<OrderItem> items = repository.findOrderItemsByUserId(userid);
+        List<Payment> payments = repository.findPaymentsByUserId(userid);
+
+        Set<Long> successOrderIds = payments.stream()
+                .filter(p -> "SUCCESS".equalsIgnoreCase(p.getStatus()))
+                .map(p -> p.getOrder().getId())
+                .collect(Collectors.toSet());
+
+        Set<Long> archivedProductIds = new HashSet<>();
+        int archived = 0;
+        for (OrderItem oi : items) {
+            Long orderId = oi.getOrder().getId();
+            if (successOrderIds.contains(orderId)) {
+                continue;
+            }
+            Product p = oi.getProduct();
+            if (!archivedProductIds.add(p.getId())) {
+                continue;
+            }
+
+            ProductAvailable pa = new ProductAvailable();
+            pa.setName(p.getName());
+            pa.setDescription(p.getDescription());
+            pa.setPrice(p.getPrice());
+            pa.setStock(p.getStock());
+            pa.setCategory(p.getCategory());
+            pa.setCreatedBy(p.getCreatedBy());
+
+            List<ProductImage> images = repository.findImagesByProductId(p.getId());
+            if (!images.isEmpty()) {
+                pa.setImageUrl(images.get(0).getImageUrl());
+            }
+
+            repository.saveProductAvailable(pa);
+            archived++;
+        }
+
+        int paymentsDeleted = repository.deletePaymentsByUserId(userid);
+        int orderItemsDeleted = repository.deleteOrderItemsByUserId(userid);
+        int ordersDeleted = repository.deleteOrdersByUserId(userid);
+
+        return Map.of(
+                "userId", userid,
+                "archived", archived,
+                "paymentsDeleted", paymentsDeleted,
+                "orderItemsDeleted", orderItemsDeleted,
+                "ordersDeleted", ordersDeleted);
     }
 
     private List<Product> saveItems(String name, String description,

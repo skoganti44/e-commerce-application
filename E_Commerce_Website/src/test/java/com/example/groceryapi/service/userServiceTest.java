@@ -27,6 +27,7 @@ import com.example.groceryapi.model.OrderItem;
 import com.example.groceryapi.model.Orders;
 import com.example.groceryapi.model.Payment;
 import com.example.groceryapi.model.Product;
+import com.example.groceryapi.model.ProductAvailable;
 import com.example.groceryapi.model.ProductImage;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
@@ -623,5 +624,144 @@ public class userServiceTest {
 
         verify(repository, times(1)).findUserById(99);
         verify(repository, never()).saveProduct(any(Product.class));
+    }
+
+    // ========== cleanupForUser — POSITIVE scenarios ==========
+
+    @Test
+    public void testCleanupForUser_ArchivesUnsoldProducts_DeletesAll() {
+        Orders order = TestData.johnsOrder();
+        List<OrderItem> items = List.of(
+                TestData.orderItem(1L, order, TestData.apple(), 2, new java.math.BigDecimal("2.00")),
+                TestData.orderItem(2L, order, TestData.milk(), 6, new java.math.BigDecimal("5.26")));
+        List<Payment> payments = List.of(
+                TestData.payment(1L, order, "CREDIT_CARD", "Decline", new java.math.BigDecimal("28.26")));
+
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(TestData.john()));
+        when(repository.findOrderItemsByUserId(1)).thenReturn(items);
+        when(repository.findPaymentsByUserId(1)).thenReturn(payments);
+        when(repository.findImagesByProductId(org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(Collections.emptyList());
+        when(repository.saveProductAvailable(any(ProductAvailable.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(repository.deletePaymentsByUserId(1)).thenReturn(1);
+        when(repository.deleteOrderItemsByUserId(1)).thenReturn(2);
+        when(repository.deleteOrdersByUserId(1)).thenReturn(1);
+
+        Map<String, Object> result = userService.cleanupForUser(1);
+
+        assertThat(result).containsEntry("userId", 1);
+        assertThat(result).containsEntry("archived", 2);
+        assertThat(result).containsEntry("paymentsDeleted", 1);
+        assertThat(result).containsEntry("orderItemsDeleted", 2);
+        assertThat(result).containsEntry("ordersDeleted", 1);
+        verify(repository, times(2)).saveProductAvailable(any(ProductAvailable.class));
+    }
+
+    @Test
+    public void testCleanupForUser_SoldItemsNotArchived() {
+        Orders order = TestData.johnsOrder();
+        List<OrderItem> items = List.of(
+                TestData.orderItem(1L, order, TestData.apple(), 2, new java.math.BigDecimal("2.00")),
+                TestData.orderItem(2L, order, TestData.milk(), 6, new java.math.BigDecimal("5.26")));
+        List<Payment> payments = List.of(
+                TestData.payment(1L, order, "CREDIT_CARD", "SUCCESS", new java.math.BigDecimal("28.26")));
+
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(TestData.john()));
+        when(repository.findOrderItemsByUserId(1)).thenReturn(items);
+        when(repository.findPaymentsByUserId(1)).thenReturn(payments);
+        when(repository.deletePaymentsByUserId(1)).thenReturn(1);
+        when(repository.deleteOrderItemsByUserId(1)).thenReturn(2);
+        when(repository.deleteOrdersByUserId(1)).thenReturn(1);
+
+        Map<String, Object> result = userService.cleanupForUser(1);
+
+        assertThat(result).containsEntry("archived", 0);
+        verify(repository, never()).saveProductAvailable(any(ProductAvailable.class));
+    }
+
+    @Test
+    public void testCleanupForUser_MixedOrders_ArchivesOnlyUnsold() {
+        Orders soldOrder = TestData.order(1L, TestData.john(), new java.math.BigDecimal("10.00"), "PLACED");
+        Orders unsoldOrder = TestData.order(2L, TestData.john(), new java.math.BigDecimal("5.00"), "PLACED");
+        List<OrderItem> items = List.of(
+                TestData.orderItem(1L, soldOrder, TestData.apple(), 1, new java.math.BigDecimal("2.00")),
+                TestData.orderItem(2L, unsoldOrder, TestData.bread(), 1, new java.math.BigDecimal("1.00")));
+        List<Payment> payments = List.of(
+                TestData.payment(1L, soldOrder, "CREDIT_CARD", "SUCCESS", new java.math.BigDecimal("10.00")),
+                TestData.payment(2L, unsoldOrder, "CREDIT_CARD", "Decline", new java.math.BigDecimal("5.00")));
+
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(TestData.john()));
+        when(repository.findOrderItemsByUserId(1)).thenReturn(items);
+        when(repository.findPaymentsByUserId(1)).thenReturn(payments);
+        when(repository.findImagesByProductId(org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(Collections.emptyList());
+        when(repository.saveProductAvailable(any(ProductAvailable.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(repository.deletePaymentsByUserId(1)).thenReturn(2);
+        when(repository.deleteOrderItemsByUserId(1)).thenReturn(2);
+        when(repository.deleteOrdersByUserId(1)).thenReturn(2);
+
+        Map<String, Object> result = userService.cleanupForUser(1);
+
+        assertThat(result).containsEntry("archived", 1);
+        verify(repository, times(1)).saveProductAvailable(any(ProductAvailable.class));
+    }
+
+    @Test
+    public void testCleanupForUser_DuplicateProductAcrossOrders_ArchivedOnce() {
+        Orders o1 = TestData.order(1L, TestData.john(), new java.math.BigDecimal("2.00"), "PLACED");
+        Orders o2 = TestData.order(2L, TestData.john(), new java.math.BigDecimal("4.00"), "PLACED");
+        List<OrderItem> items = List.of(
+                TestData.orderItem(1L, o1, TestData.apple(), 1, new java.math.BigDecimal("2.00")),
+                TestData.orderItem(2L, o2, TestData.apple(), 2, new java.math.BigDecimal("2.00")));
+
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(TestData.john()));
+        when(repository.findOrderItemsByUserId(1)).thenReturn(items);
+        when(repository.findPaymentsByUserId(1)).thenReturn(Collections.emptyList());
+        when(repository.findImagesByProductId(org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(Collections.emptyList());
+        when(repository.saveProductAvailable(any(ProductAvailable.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(repository.deletePaymentsByUserId(1)).thenReturn(0);
+        when(repository.deleteOrderItemsByUserId(1)).thenReturn(2);
+        when(repository.deleteOrdersByUserId(1)).thenReturn(2);
+
+        Map<String, Object> result = userService.cleanupForUser(1);
+
+        assertThat(result).containsEntry("archived", 1);
+        verify(repository, times(1)).saveProductAvailable(any(ProductAvailable.class));
+    }
+
+    @Test
+    public void testCleanupForUser_NoOrders_ReturnsZeroCounts() {
+        when(repository.findUserById(1)).thenReturn(java.util.Optional.of(TestData.john()));
+        when(repository.findOrderItemsByUserId(1)).thenReturn(Collections.emptyList());
+        when(repository.findPaymentsByUserId(1)).thenReturn(Collections.emptyList());
+        when(repository.deletePaymentsByUserId(1)).thenReturn(0);
+        when(repository.deleteOrderItemsByUserId(1)).thenReturn(0);
+        when(repository.deleteOrdersByUserId(1)).thenReturn(0);
+
+        Map<String, Object> result = userService.cleanupForUser(1);
+
+        assertThat(result).containsEntry("archived", 0);
+        assertThat(result).containsEntry("paymentsDeleted", 0);
+        assertThat(result).containsEntry("orderItemsDeleted", 0);
+        assertThat(result).containsEntry("ordersDeleted", 0);
+        verify(repository, never()).saveProductAvailable(any(ProductAvailable.class));
+    }
+
+    // ========== cleanupForUser — NEGATIVE scenarios ==========
+
+    @Test
+    public void testCleanupForUser_UserNotFound_ThrowsIllegalArgument() {
+        when(repository.findUserById(99)).thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> userService.cleanupForUser(99))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("User not found: 99");
+
+        verify(repository, never()).findOrderItemsByUserId(org.mockito.ArgumentMatchers.anyInt());
+        verify(repository, never()).deletePaymentsByUserId(org.mockito.ArgumentMatchers.anyInt());
     }
 }

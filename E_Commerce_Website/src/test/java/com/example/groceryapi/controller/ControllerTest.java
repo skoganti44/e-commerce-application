@@ -6,6 +6,7 @@ import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -492,5 +493,63 @@ public class ControllerTest {
                         .contentType(MediaType.APPLICATION_XML)
                         .content("<products/>"))
                 .andExpect(status().isUnsupportedMediaType());
+    }
+
+    // ========== DELETE /cleanup — POSITIVE scenarios ==========
+
+    @Test
+    public void testCleanup_ValidUser_Returns200WithCounts() throws Exception {
+        when(userService.cleanupForUser(1)).thenReturn(Map.of(
+                "userId", 1,
+                "archived", 2,
+                "paymentsDeleted", 1,
+                "orderItemsDeleted", 2,
+                "ordersDeleted", 1));
+
+        mockMvc.perform(delete("/cleanup").param("userid", "1").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(1))
+                .andExpect(jsonPath("$.archived").value(2))
+                .andExpect(jsonPath("$.paymentsDeleted").value(1))
+                .andExpect(jsonPath("$.orderItemsDeleted").value(2))
+                .andExpect(jsonPath("$.ordersDeleted").value(1));
+    }
+
+    @Test
+    public void testCleanup_UserWithNoOrders_Returns200WithZeros() throws Exception {
+        when(userService.cleanupForUser(1)).thenReturn(Map.of(
+                "userId", 1,
+                "archived", 0,
+                "paymentsDeleted", 0,
+                "orderItemsDeleted", 0,
+                "ordersDeleted", 0));
+
+        mockMvc.perform(delete("/cleanup").param("userid", "1").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.archived").value(0));
+    }
+
+    // ========== DELETE /cleanup — NEGATIVE scenarios ==========
+
+    @Test
+    public void testCleanup_UserNotFound_Returns404() throws Exception {
+        when(userService.cleanupForUser(99))
+                .thenThrow(new IllegalArgumentException("User not found: 99"));
+
+        mockMvc.perform(delete("/cleanup").param("userid", "99").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("User not found: 99"));
+    }
+
+    @Test
+    public void testCleanup_MissingUseridParam_Returns400() throws Exception {
+        mockMvc.perform(delete("/cleanup").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void testCleanup_InvalidUseridFormat_Returns400() throws Exception {
+        mockMvc.perform(delete("/cleanup").param("userid", "abc").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
     }
 }

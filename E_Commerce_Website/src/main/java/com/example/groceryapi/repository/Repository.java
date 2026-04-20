@@ -13,6 +13,7 @@ import com.example.groceryapi.model.OrderItem;
 import com.example.groceryapi.model.Orders;
 import com.example.groceryapi.model.Payment;
 import com.example.groceryapi.model.Product;
+import com.example.groceryapi.model.ProductAvailable;
 import com.example.groceryapi.model.ProductImage;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
@@ -51,6 +52,10 @@ public class Repository {
     private static final String SELECT_ROLES_BY_USER_ID = "SELECT ur.role FROM UserRole ur WHERE ur.user.userid = :userid";
 
     private static final String SELECT_PAYMENTS_BY_USER_ID = "SELECT p FROM Payment p WHERE p.order.user.userid = :userid";
+
+    private static final String DELETE_PAYMENTS_BY_USER_ID = "DELETE FROM Payment p WHERE p.order.id IN (SELECT o.id FROM Orders o WHERE o.user.userid = :userid)";
+    private static final String DELETE_ORDER_ITEMS_BY_USER_ID = "DELETE FROM OrderItem oi WHERE oi.order.id IN (SELECT o.id FROM Orders o WHERE o.user.userid = :userid)";
+    private static final String DELETE_ORDERS_BY_USER_ID = "DELETE FROM Orders o WHERE o.user.userid = :userid";
 
     @PersistenceContext
     private EntityManager em;
@@ -261,5 +266,31 @@ public class Repository {
         return em.createQuery(SELECT_PAYMENTS_BY_USER_ID, Payment.class)
                 .setParameter("userid", userid)
                 .getResultList();
+    }
+
+    public ProductAvailable saveProductAvailable(ProductAvailable pa) {
+        if (pa.getId() == null) {
+            em.persist(pa);
+            return pa;
+        }
+        return em.merge(pa);
+    }
+
+    public int deletePaymentsByUserId(int userid) {
+        return em.createQuery(DELETE_PAYMENTS_BY_USER_ID)
+                .setParameter("userid", userid)
+                .executeUpdate();
+    }
+
+    public int deleteOrderItemsByUserId(int userid) {
+        return em.createQuery(DELETE_ORDER_ITEMS_BY_USER_ID)
+                .setParameter("userid", userid)
+                .executeUpdate();
+    }
+
+    public int deleteOrdersByUserId(int userid) {
+        return em.createQuery(DELETE_ORDERS_BY_USER_ID)
+                .setParameter("userid", userid)
+                .executeUpdate();
     }
 }

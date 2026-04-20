@@ -6,6 +6,7 @@ import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -88,6 +89,15 @@ public class Controller {
             return ResponseEntity.ok(userService.saveProducts(request));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @DeleteMapping(value = "/cleanup", produces = "application/json")
+    public ResponseEntity<Map<String, Object>> cleanup(@RequestParam int userid) {
+        try {
+            return ResponseEntity.ok(userService.cleanupForUser(userid));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
         }
     }
 }

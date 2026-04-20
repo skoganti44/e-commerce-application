@@ -18,6 +18,7 @@ import com.example.groceryapi.model.OrderItem;
 import com.example.groceryapi.model.Orders;
 import com.example.groceryapi.model.Payment;
 import com.example.groceryapi.model.Product;
+import com.example.groceryapi.model.ProductAvailable;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.Users;
@@ -489,6 +490,94 @@ public class RepositoryTest {
         repository.saveOrder(TestData.newOrder(user, new BigDecimal("10.00"), "PLACED"));
 
         assertThat(repository.findPaymentsByUserId(user.getuserid())).isEmpty();
+    }
+
+    // ========== ProductAvailable / cleanup deletes — POSITIVE scenarios ==========
+
+    @Test
+    public void testSaveProductAvailable() {
+        Users creator = repository.saveUser(TestData.newJohn());
+        Product p = persistProduct("Apple", new BigDecimal("2.00"), 50);
+
+        ProductAvailable saved = repository.saveProductAvailable(
+                TestData.newProductAvailable(p, creator, "http://img/apple.jpg"));
+
+        assertThat(saved.getId()).isNotNull();
+        assertThat(saved.getName()).isEqualTo("Apple");
+        assertThat(saved.getPrice()).isEqualByComparingTo("2.00");
+        assertThat(saved.getImageUrl()).isEqualTo("http://img/apple.jpg");
+        assertThat(saved.getCreatedBy().getname()).isEqualTo("John");
+    }
+
+    @Test
+    public void testDeletePaymentsByUserId() {
+        Users user = repository.saveUser(TestData.newJohn());
+        Orders order = repository.saveOrder(TestData.newOrder(user, new BigDecimal("10.00"), "PLACED"));
+        repository.savePayment(TestData.newPayment(order, "CREDIT_CARD", "SUCCESS", new BigDecimal("10.00")));
+        repository.savePayment(TestData.newPayment(order, "CREDIT_CARD", "Decline", new BigDecimal("10.00")));
+
+        int deleted = repository.deletePaymentsByUserId(user.getuserid());
+
+        assertThat(deleted).isEqualTo(2);
+        assertThat(repository.findPaymentsByUserId(user.getuserid())).isEmpty();
+    }
+
+    @Test
+    public void testDeletePaymentsByUserId_OnlyDeletesForThatUser() {
+        Users john = repository.saveUser(TestData.newJohn());
+        Users jane = repository.saveUser(TestData.newJane());
+        Orders johnOrder = repository.saveOrder(TestData.newOrder(john, new BigDecimal("10.00"), "PLACED"));
+        Orders janeOrder = repository.saveOrder(TestData.newOrder(jane, new BigDecimal("20.00"), "PLACED"));
+        repository.savePayment(TestData.newPayment(johnOrder, "CREDIT_CARD", "SUCCESS", new BigDecimal("10.00")));
+        repository.savePayment(TestData.newPayment(janeOrder, "CREDIT_CARD", "SUCCESS", new BigDecimal("20.00")));
+
+        repository.deletePaymentsByUserId(john.getuserid());
+
+        assertThat(repository.findPaymentsByUserId(john.getuserid())).isEmpty();
+        assertThat(repository.findPaymentsByUserId(jane.getuserid())).hasSize(1);
+    }
+
+    @Test
+    public void testDeleteOrderItemsByUserId() {
+        Users user = repository.saveUser(TestData.newJohn());
+        Orders order = repository.saveOrder(TestData.newOrder(user, new BigDecimal("10.00"), "PLACED"));
+        Product apple = persistProduct("Apple", new BigDecimal("2.00"), 50);
+        repository.saveOrderItem(TestData.newOrderItem(order, apple, 2, new BigDecimal("2.00")));
+        repository.saveOrderItem(TestData.newOrderItem(order, apple, 1, new BigDecimal("2.00")));
+
+        int deleted = repository.deleteOrderItemsByUserId(user.getuserid());
+
+        assertThat(deleted).isEqualTo(2);
+        assertThat(repository.findOrderItemsByUserId(user.getuserid())).isEmpty();
+    }
+
+    @Test
+    public void testDeleteOrdersByUserId() {
+        Users user = repository.saveUser(TestData.newJohn());
+        repository.saveOrder(TestData.newOrder(user, new BigDecimal("10.00"), "PLACED"));
+        repository.saveOrder(TestData.newOrder(user, new BigDecimal("20.00"), "PLACED"));
+
+        int deleted = repository.deleteOrdersByUserId(user.getuserid());
+
+        assertThat(deleted).isEqualTo(2);
+        assertThat(repository.findOrdersByUserId(user.getuserid())).isEmpty();
+    }
+
+    // ========== NEGATIVE scenarios ==========
+
+    @Test
+    public void testDeletePaymentsByUserId_NoMatch() {
+        assertThat(repository.deletePaymentsByUserId(999)).isZero();
+    }
+
+    @Test
+    public void testDeleteOrderItemsByUserId_NoMatch() {
+        assertThat(repository.deleteOrderItemsByUserId(999)).isZero();
+    }
+
+    @Test
+    public void testDeleteOrdersByUserId_NoMatch() {
+        assertThat(repository.deleteOrdersByUserId(999)).isZero();
     }
 
     private Product persistProduct(String name, BigDecimal price, int stock) {
