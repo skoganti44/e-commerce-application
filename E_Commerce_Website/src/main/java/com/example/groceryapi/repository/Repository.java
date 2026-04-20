@@ -6,6 +6,9 @@ import java.util.Optional;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.groceryapi.model.Category;
+import com.example.groceryapi.model.Product;
+import com.example.groceryapi.model.ProductImage;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.Users;
@@ -106,5 +109,49 @@ public class Repository {
 
     public void deleteAllUserRoles() {
         em.createQuery("DELETE FROM UserRole").executeUpdate();
+    }
+
+    public Category saveCategory(Category category) {
+        if (category.getId() == null) {
+            em.persist(category);
+            return category;
+        }
+        return em.merge(category);
+    }
+
+    public List<Category> findAllCategories() {
+        return em.createQuery("SELECT c FROM Category c", Category.class).getResultList();
+    }
+
+    public Product saveProduct(Product product) {
+        if (product.getId() == null) {
+            em.persist(product);
+            em.flush();
+            em.refresh(product);
+            return product;
+        }
+        return em.merge(product);
+    }
+
+    public List<Product> findAllProducts() {
+        return em.createQuery("SELECT p FROM Product p", Product.class).getResultList();
+    }
+
+    public Optional<Product> findProductById(long id) {
+        return Optional.ofNullable(em.find(Product.class, id));
+    }
+
+    public ProductImage saveProductImage(ProductImage image) {
+        if (image.getId() == null) {
+            em.persist(image);
+            return image;
+        }
+        return em.merge(image);
+    }
+
+    public List<ProductImage> findImagesByProductId(long productId) {
+        return em.createQuery("SELECT pi FROM ProductImage pi WHERE pi.product.id = :pid", ProductImage.class)
+                .setParameter("pid", productId)
+                .getResultList();
     }
 }

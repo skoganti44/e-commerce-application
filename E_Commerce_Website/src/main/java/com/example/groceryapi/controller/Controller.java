@@ -4,10 +4,16 @@ package com.example.groceryapi.controller;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.groceryapi.dto.ProductRequest;
+import com.example.groceryapi.dto.ProductsRequest;
+import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.Users;
@@ -33,5 +39,23 @@ public class Controller {
             @RequestParam(required = false) Integer userid,
             @RequestParam(required = false) Integer roleid) {
         return userService.fetchUserRoles(userid, roleid);
+    }
+
+    @PostMapping(value = "/product", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<List<Product>> saveProduct(@RequestBody ProductRequest request) {
+        try {
+            return ResponseEntity.ok(userService.saveProduct(request));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PostMapping(value = "/products", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<List<Product>> saveProducts(@RequestBody ProductsRequest request) {
+        try {
+            return ResponseEntity.ok(userService.saveProducts(request));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
     }
 }
