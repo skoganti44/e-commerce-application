@@ -1,8 +1,13 @@
 package com.example.groceryapi.testdata;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.example.groceryapi.model.Cart;
+import com.example.groceryapi.model.CartItem;
+import com.example.groceryapi.model.Category;
+import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.Users;
@@ -105,5 +110,78 @@ public final class TestData {
 
     public static List<UserRole> userRoles() {
         return List.of(johnAsManager(), janeAsEngineer());
+    }
+
+    public static Category category(Long id, String name, String description) {
+        Category c = new Category();
+        c.setId(id);
+        c.setName(name);
+        c.setDescription(description);
+        return c;
+    }
+
+    public static Product product(Long id, String name, BigDecimal price, Integer stock) {
+        Product p = new Product();
+        p.setId(id);
+        p.setName(name);
+        p.setDescription(name + " description");
+        p.setPrice(price);
+        p.setStock(stock);
+        return p;
+    }
+
+    public static Product apple() {
+        return product(1L, "Apple", new BigDecimal("2.00"), 50);
+    }
+
+    public static Product milk() {
+        return product(3L, "Milk", new BigDecimal("5.26"), 30);
+    }
+
+    public static Product bread() {
+        return product(5L, "Bread", new BigDecimal("1.00"), 100);
+    }
+
+    public static Cart cart(Long id, Users user, LocalDateTime createdAt) {
+        Cart c = new Cart();
+        c.setId(id);
+        c.setUser(user);
+        c.setCreatedAt(createdAt);
+        return c;
+    }
+
+    public static Cart johnsCart() {
+        return cart(1L, john(), JOHN_CREATED_AT);
+    }
+
+    public static Cart newCart(Users user) {
+        Cart c = new Cart();
+        c.setUser(user);
+        return c;
+    }
+
+    public static CartItem cartItem(Long id, Cart cart, Product product, Integer quantity) {
+        CartItem ci = new CartItem();
+        ci.setId(id);
+        ci.setCart(cart);
+        ci.setProduct(product);
+        ci.setQuantity(quantity);
+        return ci;
+    }
+
+    public static CartItem newCartItem(Cart cart, Product product, Integer quantity) {
+        CartItem ci = new CartItem();
+        ci.setCart(cart);
+        ci.setProduct(product);
+        ci.setQuantity(quantity);
+        return ci;
+    }
+
+    public static List<CartItem> johnsCartItems() {
+        Cart cart = johnsCart();
+        return List.of(
+                cartItem(1L, cart, apple(), 3),
+                cartItem(2L, cart, milk(), 6),
+                cartItem(3L, cart, bread(), 10));
     }
 }

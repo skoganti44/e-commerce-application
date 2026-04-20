@@ -2,8 +2,10 @@ package com.example.groceryapi.service;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -16,6 +18,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.mockito.Mockito.never;
 
+import com.example.groceryapi.model.Cart;
+import com.example.groceryapi.model.CartItem;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.Users;
@@ -187,5 +191,68 @@ public class userServiceTest {
 
         assertThat(result).isEmpty();
         verify(repository, times(1)).findAllUserRoles();
+    }
+
+    // ========== fetchCartByUserId — POSITIVE scenarios ==========
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testFetchCartByUserId_ReturnsCartAndItems() {
+        Cart cart = TestData.johnsCart();
+        List<CartItem> items = TestData.johnsCartItems();
+        when(repository.findCartsByUserId(1)).thenReturn(List.of(cart));
+        when(repository.findCartItemsByUserId(1)).thenReturn(items);
+
+        Map<String, Object> result = userService.fetchCartByUserId(1);
+
+        assertThat(result).containsKeys("cart", "items");
+        assertThat((List<Cart>) result.get("cart")).hasSize(1);
+        assertThat((List<CartItem>) result.get("items")).hasSize(3);
+        verify(repository, times(1)).findCartsByUserId(1);
+        verify(repository, times(1)).findCartItemsByUserId(1);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testFetchCartByUserId_CartExistsButNoItems() {
+        when(repository.findCartsByUserId(1)).thenReturn(List.of(TestData.johnsCart()));
+        when(repository.findCartItemsByUserId(1)).thenReturn(Collections.emptyList());
+
+        Map<String, Object> result = userService.fetchCartByUserId(1);
+
+        assertThat((List<Cart>) result.get("cart")).hasSize(1);
+        assertThat((List<CartItem>) result.get("items")).isEmpty();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testFetchCartByUserId_VerifiesItemFields() {
+        Cart cart = TestData.johnsCart();
+        when(repository.findCartsByUserId(1)).thenReturn(List.of(cart));
+        when(repository.findCartItemsByUserId(1)).thenReturn(TestData.johnsCartItems());
+
+        Map<String, Object> result = userService.fetchCartByUserId(1);
+        List<CartItem> items = (List<CartItem>) result.get("items");
+
+        assertThat(items.get(0).getProduct().getName()).isEqualTo("Apple");
+        assertThat(items.get(0).getQuantity()).isEqualTo(3);
+        assertThat(items.get(1).getProduct().getName()).isEqualTo("Milk");
+        assertThat(items.get(1).getQuantity()).isEqualTo(6);
+        assertThat(items.get(2).getProduct().getName()).isEqualTo("Bread");
+        assertThat(items.get(2).getQuantity()).isEqualTo(10);
+    }
+
+    // ========== fetchCartByUserId — NEGATIVE scenarios ==========
+
+    @Test
+    public void testFetchCartByUserId_NoCartForUser_ThrowsException() {
+        when(repository.findCartsByUserId(99)).thenReturn(Collections.emptyList());
+
+        assertThatThrownBy(() -> userService.fetchCartByUserId(99))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("No cart found for userId: 99");
+
+        verify(repository, times(1)).findCartsByUserId(99);
+        verify(repository, never()).findCartItemsByUserId(org.mockito.ArgumentMatchers.anyInt());
     }
 }

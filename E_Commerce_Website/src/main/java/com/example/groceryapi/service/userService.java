@@ -10,6 +10,8 @@ import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
+import com.example.groceryapi.model.Cart;
+import com.example.groceryapi.model.CartItem;
 import com.example.groceryapi.model.Category;
 import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.ProductImage;
@@ -36,6 +38,17 @@ public class userService {
             return repository.findAllRoles();
         }
         return repository.findRolesByDepartment(department);
+    }
+
+    public Map<String, Object> fetchCartByUserId(int userid) {
+        List<Cart> carts = repository.findCartsByUserId(userid);
+        if (carts.isEmpty()) {
+            throw new IllegalArgumentException("No cart found for userId: " + userid);
+        }
+        List<CartItem> items = repository.findCartItemsByUserId(userid);
+        return Map.of(
+                "cart", carts,
+                "items", items);
     }
 
     public List<UserRole> fetchUserRoles(Integer userid, Integer roleid) {

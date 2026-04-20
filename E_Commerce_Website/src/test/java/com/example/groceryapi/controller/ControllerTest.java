@@ -2,6 +2,7 @@ package com.example.groceryapi.controller;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -146,6 +147,72 @@ public class ControllerTest {
     @Test
     public void testFetchUserRoles_WithoutAcceptHeader_Returns406() throws Exception {
         mockMvc.perform(get("/userRoles").accept(MediaType.APPLICATION_XML))
+                .andExpect(status().isNotAcceptable());
+    }
+
+    // ========== /cart endpoint — POSITIVE scenarios ==========
+
+    @Test
+    public void testFetchCart_ReturnsCartWithItems() throws Exception {
+        when(userService.fetchCartByUserId(1)).thenReturn(Map.of(
+                "cart", List.of(TestData.johnsCart()),
+                "items", TestData.johnsCartItems()));
+
+        mockMvc.perform(get("/cart").param("userid", "1").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cart.length()").value(1))
+                .andExpect(jsonPath("$.cart[0].id").value(1))
+                .andExpect(jsonPath("$.cart[0].user.userid").value(1))
+                .andExpect(jsonPath("$.cart[0].user.name").value("John"))
+                .andExpect(jsonPath("$.items.length()").value(3))
+                .andExpect(jsonPath("$.items[0].quantity").value(3))
+                .andExpect(jsonPath("$.items[0].product.name").value("Apple"))
+                .andExpect(jsonPath("$.items[0].product.price").value(2.00))
+                .andExpect(jsonPath("$.items[1].quantity").value(6))
+                .andExpect(jsonPath("$.items[1].product.name").value("Milk"))
+                .andExpect(jsonPath("$.items[2].quantity").value(10))
+                .andExpect(jsonPath("$.items[2].product.name").value("Bread"));
+    }
+
+    @Test
+    public void testFetchCart_CartExistsButNoItems() throws Exception {
+        when(userService.fetchCartByUserId(1)).thenReturn(Map.of(
+                "cart", List.of(TestData.johnsCart()),
+                "items", Collections.emptyList()));
+
+        mockMvc.perform(get("/cart").param("userid", "1").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cart.length()").value(1))
+                .andExpect(jsonPath("$.items.length()").value(0));
+    }
+
+    // ========== /cart endpoint — NEGATIVE scenarios ==========
+
+    @Test
+    public void testFetchCart_UserHasNoCart_Returns404() throws Exception {
+        when(userService.fetchCartByUserId(99))
+                .thenThrow(new IllegalArgumentException("No cart found for userId: 99"));
+
+        mockMvc.perform(get("/cart").param("userid", "99").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("No cart found for userId: 99"));
+    }
+
+    @Test
+    public void testFetchCart_MissingUseridParam_Returns400() throws Exception {
+        mockMvc.perform(get("/cart").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void testFetchCart_InvalidUseridFormat_Returns400() throws Exception {
+        mockMvc.perform(get("/cart").param("userid", "abc").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    public void testFetchCart_WithoutAcceptHeader_Returns406() throws Exception {
+        mockMvc.perform(get("/cart").param("userid", "1").accept(MediaType.APPLICATION_XML))
                 .andExpect(status().isNotAcceptable());
     }
 }

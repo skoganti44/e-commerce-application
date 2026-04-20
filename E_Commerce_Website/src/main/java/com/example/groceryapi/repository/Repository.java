@@ -6,6 +6,8 @@ import java.util.Optional;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.groceryapi.model.Cart;
+import com.example.groceryapi.model.CartItem;
 import com.example.groceryapi.model.Category;
 import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.ProductImage;
@@ -37,6 +39,9 @@ public class Repository {
     private static final String SELECT_ALL_PRODUCTS = "SELECT p FROM Product p";
 
     private static final String SELECT_IMAGES_BY_PRODUCT_ID = "SELECT pi FROM ProductImage pi WHERE pi.product.id = :pid";
+
+    private static final String SELECT_CART_BY_USER_ID = "SELECT c FROM Cart c WHERE c.user.userid = :userid";
+    private static final String SELECT_CART_ITEMS_BY_USER_ID = "SELECT ci FROM CartItem ci WHERE ci.cart.user.userid = :userid";
 
     @PersistenceContext
     private EntityManager em;
@@ -170,6 +175,34 @@ public class Repository {
     public List<ProductImage> findImagesByProductId(long productId) {
         return em.createQuery(SELECT_IMAGES_BY_PRODUCT_ID, ProductImage.class)
                 .setParameter("pid", productId)
+                .getResultList();
+    }
+
+    public Cart saveCart(Cart cart) {
+        if (cart.getId() == null) {
+            em.persist(cart);
+            return cart;
+        }
+        return em.merge(cart);
+    }
+
+    public CartItem saveCartItem(CartItem item) {
+        if (item.getId() == null) {
+            em.persist(item);
+            return item;
+        }
+        return em.merge(item);
+    }
+
+    public List<Cart> findCartsByUserId(int userid) {
+        return em.createQuery(SELECT_CART_BY_USER_ID, Cart.class)
+                .setParameter("userid", userid)
+                .getResultList();
+    }
+
+    public List<CartItem> findCartItemsByUserId(int userid) {
+        return em.createQuery(SELECT_CART_ITEMS_BY_USER_ID, CartItem.class)
+                .setParameter("userid", userid)
                 .getResultList();
     }
 }

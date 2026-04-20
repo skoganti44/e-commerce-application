@@ -1,5 +1,6 @@
 package com.example.groceryapi.repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -10,6 +11,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 
+import com.example.groceryapi.model.Cart;
+import com.example.groceryapi.model.CartItem;
+import com.example.groceryapi.model.Category;
+import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.Users;
@@ -204,6 +209,116 @@ public class RepositoryTest {
     @Test
     public void testFindUserRolesByRoleId_NoMatch() {
         assertThat(repository.findUserRolesByRoleId(999)).isEmpty();
+    }
+
+    // ========== Cart / CartItem — POSITIVE scenarios ==========
+
+    @Test
+    public void testSaveCart() {
+        Users user = repository.saveUser(TestData.newJohn());
+
+        Cart saved = repository.saveCart(TestData.newCart(user));
+
+        assertThat(saved.getId()).isNotNull();
+        assertThat(saved.getUser().getname()).isEqualTo("John");
+    }
+
+    @Test
+    public void testFindCartsByUserId() {
+        Users john = repository.saveUser(TestData.newJohn());
+        Users jane = repository.saveUser(TestData.newJane());
+        repository.saveCart(TestData.newCart(john));
+        repository.saveCart(TestData.newCart(jane));
+
+        List<Cart> carts = repository.findCartsByUserId(john.getuserid());
+
+        assertThat(carts).hasSize(1);
+        assertThat(carts.get(0).getUser().getname()).isEqualTo("John");
+    }
+
+    @Test
+    public void testSaveCartItem() {
+        Users user = repository.saveUser(TestData.newJohn());
+        Cart cart = repository.saveCart(TestData.newCart(user));
+        Product product = persistProduct("Apple", new BigDecimal("2.00"), 50);
+
+        CartItem saved = repository.saveCartItem(TestData.newCartItem(cart, product, 3));
+
+        assertThat(saved.getId()).isNotNull();
+        assertThat(saved.getCart().getId()).isEqualTo(cart.getId());
+        assertThat(saved.getProduct().getName()).isEqualTo("Apple");
+        assertThat(saved.getQuantity()).isEqualTo(3);
+    }
+
+    @Test
+    public void testFindCartItemsByUserId() {
+        Users user = repository.saveUser(TestData.newJohn());
+        Cart cart = repository.saveCart(TestData.newCart(user));
+        Product apple = persistProduct("Apple", new BigDecimal("2.00"), 50);
+        Product milk = persistProduct("Milk", new BigDecimal("5.26"), 30);
+        repository.saveCartItem(TestData.newCartItem(cart, apple, 3));
+        repository.saveCartItem(TestData.newCartItem(cart, milk, 6));
+
+        List<CartItem> items = repository.findCartItemsByUserId(user.getuserid());
+
+        assertThat(items).hasSize(2);
+        assertThat(items).extracting(ci -> ci.getProduct().getName())
+                .containsExactlyInAnyOrder("Apple", "Milk");
+        assertThat(items).extracting(CartItem::getQuantity)
+                .containsExactlyInAnyOrder(3, 6);
+    }
+
+    @Test
+    public void testFindCartItemsByUserId_OnlyReturnsOwnersItems() {
+        Users john = repository.saveUser(TestData.newJohn());
+        Users jane = repository.saveUser(TestData.newJane());
+        Cart johnsCart = repository.saveCart(TestData.newCart(john));
+        Cart janesCart = repository.saveCart(TestData.newCart(jane));
+        Product apple = persistProduct("Apple", new BigDecimal("2.00"), 50);
+        repository.saveCartItem(TestData.newCartItem(johnsCart, apple, 3));
+        repository.saveCartItem(TestData.newCartItem(janesCart, apple, 10));
+
+        List<CartItem> johnsItems = repository.findCartItemsByUserId(john.getuserid());
+
+        assertThat(johnsItems).hasSize(1);
+        assertThat(johnsItems.get(0).getQuantity()).isEqualTo(3);
+    }
+
+    // ========== Cart / CartItem — NEGATIVE scenarios ==========
+
+    @Test
+    public void testFindCartsByUserId_NoMatch() {
+        assertThat(repository.findCartsByUserId(999)).isEmpty();
+    }
+
+    @Test
+    public void testFindCartItemsByUserId_NoMatch() {
+        assertThat(repository.findCartItemsByUserId(999)).isEmpty();
+    }
+
+    @Test
+    public void testFindCartItemsByUserId_CartExistsButNoItems() {
+        Users user = repository.saveUser(TestData.newJohn());
+        repository.saveCart(TestData.newCart(user));
+
+        List<CartItem> items = repository.findCartItemsByUserId(user.getuserid());
+
+        assertThat(items).isEmpty();
+    }
+
+    private Product persistProduct(String name, BigDecimal price, int stock) {
+        Category category = new Category();
+        category.setName(name + " Category");
+        category.setDescription(name + " desc");
+        category = repository.saveCategory(category);
+
+        Product p = new Product();
+        p.setName(name);
+        p.setDescription(name);
+        p.setPrice(price);
+        p.setStock(stock);
+        p.setCategory(category);
+        return repository.saveProduct(p);
     }
 
     private static Role newRole(String fullName, String role, String department) {

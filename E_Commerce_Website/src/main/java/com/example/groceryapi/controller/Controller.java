@@ -40,6 +40,15 @@ public class Controller {
         return userService.fetchUserRoles(userid, roleid);
     }
 
+    @GetMapping(value = "/cart", headers = "Accept=application/json")
+    public ResponseEntity<Map<String, Object>> fetchCart(@RequestParam int userid) {
+        try {
+            return ResponseEntity.ok(userService.fetchCartByUserId(userid));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @PostMapping(value = "/product", consumes = "application/json", produces = "application/json")
     public ResponseEntity<List<Product>> saveProduct(@RequestBody Map<String, Object> request) {
         try {
