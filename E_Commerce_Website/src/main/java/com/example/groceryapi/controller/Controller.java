@@ -30,6 +30,42 @@ public class Controller {
         return userService.fetchUsers();
     }
 
+    @PostMapping(value = "/register", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> register(@RequestBody Map<String, String> body) {
+        try {
+            Users saved = userService.register(
+                    body.get("name"),
+                    body.get("email"),
+                    body.get("password"),
+                    body.get("userType"));
+            return ResponseEntity.ok(toPublicUser(saved));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(409).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/login", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> login(@RequestBody Map<String, String> body) {
+        try {
+            Users user = userService.login(body.get("email"), body.get("password"));
+            return ResponseEntity.ok(toPublicUser(user));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(401).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    private Map<String, Object> toPublicUser(Users u) {
+        Map<String, Object> out = new java.util.HashMap<>();
+        out.put("userid", u.getuserid());
+        out.put("name", u.getname());
+        out.put("email", u.getemail());
+        out.put("createdat", u.getcreatedat() == null ? "" : u.getcreatedat().toString());
+        out.put("roles", userService.fetchRoleNamesForUser(u.getuserid()));
+        return out;
+    }
+
     @GetMapping(value = "/roles", headers = "Accept=application/json")
     public List<Role> fetchRoles(@RequestParam(required = false) String department) {
         return userService.fetchRoles(department);
@@ -48,6 +84,26 @@ public class Controller {
             return ResponseEntity.ok(userService.fetchCartByUserId(userid));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/cart/add", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> addToCart(@RequestBody Map<String, Object> body) {
+        try {
+            int userid = ((Number) body.get("userid")).intValue();
+            long productId = ((Number) body.get("productId")).longValue();
+            int quantity = body.get("quantity") == null ? 1 : ((Number) body.get("quantity")).intValue();
+            String sweetenerType = (String) body.get("sweetenerType");
+            Integer sweetenerPercent = body.get("sweetenerPercent") == null
+                    ? null
+                    : ((Number) body.get("sweetenerPercent")).intValue();
+            String flourType = (String) body.get("flourType");
+            userService.addToCart(userid, productId, quantity,
+                    sweetenerType, sweetenerPercent, flourType);
+            return ResponseEntity.ok(userService.fetchCartByUserId(userid));
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid request" : e.getMessage()));
         }
     }
 
@@ -74,21 +130,30 @@ public class Controller {
         }
     }
 
+    @GetMapping(value = "/products", headers = "Accept=application/json")
+    public List<Map<String, Object>> fetchProducts() {
+        return userService.fetchAllProducts();
+    }
+
     @PostMapping(value = "/product", consumes = "application/json", produces = "application/json")
-    public ResponseEntity<List<Product>> saveProduct(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<?> saveProduct(@RequestBody Map<String, Object> request) {
         try {
             return ResponseEntity.ok(userService.saveProduct(request));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 
     @PostMapping(value = "/products", consumes = "application/json", produces = "application/json")
-    public ResponseEntity<List<Product>> saveProducts(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<?> saveProducts(@RequestBody Map<String, Object> request) {
         try {
             return ResponseEntity.ok(userService.saveProducts(request));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(Map.of("error", e.getMessage()));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 

@@ -27,9 +27,11 @@ import jakarta.persistence.PersistenceContext;
 public class Repository {
 
     private static final String SELECT_ALL_USERS = "SELECT u FROM Users u";
+    private static final String SELECT_USER_BY_EMAIL = "SELECT u FROM Users u WHERE u.email = :email";
     private static final String DELETE_ALL_USERS = "DELETE FROM Users";
 
     private static final String SELECT_ALL_ROLES = "SELECT r FROM Role r";
+    private static final String SELECT_ROLE_BY_NAME = "SELECT r FROM Role r WHERE LOWER(r.role) = LOWER(:name)";
     private static final String SELECT_ROLES_BY_DEPARTMENT = "SELECT r FROM Role r WHERE r.department = :department";
     private static final String DELETE_ALL_ROLES = "DELETE FROM Role";
 
@@ -68,6 +70,13 @@ public class Repository {
         return Optional.ofNullable(em.find(Users.class, id));
     }
 
+    public Optional<Users> findUserByEmail(String email) {
+        return em.createQuery(SELECT_USER_BY_EMAIL, Users.class)
+                .setParameter("email", email)
+                .getResultStream()
+                .findFirst();
+    }
+
     public Users saveUser(Users user) {
         if (user.getuserid() == 0) {
             em.persist(user);
@@ -95,6 +104,13 @@ public class Repository {
         return em.createQuery(SELECT_ROLES_BY_DEPARTMENT, Role.class)
                 .setParameter("department", department)
                 .getResultList();
+    }
+
+    public Optional<Role> findRoleByName(String name) {
+        return em.createQuery(SELECT_ROLE_BY_NAME, Role.class)
+                .setParameter("name", name)
+                .getResultStream()
+                .findFirst();
     }
 
     public Optional<Role> findRoleById(int id) {

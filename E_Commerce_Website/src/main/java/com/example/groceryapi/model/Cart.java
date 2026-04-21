@@ -23,7 +23,7 @@ public class Cart {
     @JoinColumn(name = "user_id")
     private Users user;
 
-    @Column(name = "created_at", insertable = false, updatable = false)
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
     public Long getId() {

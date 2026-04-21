@@ -4,6 +4,7 @@
 package com.example.groceryapi.service;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +32,13 @@ import com.example.groceryapi.repository.Repository;
 @Service
 public class userService {
 
+    private static final Set<String> ALLOWED_SWEETENERS = Set.of(
+            "CANE_SUGAR", "BROWN_SUGAR", "MAPLE_SYRUP", "JAGGERY", "HONEY");
+
+    private static final Set<String> ALLOWED_FLOURS = Set.of(
+            "FINGER_MILLET", "BAJRA_MILLET", "LITTLE_MILLET",
+            "SORGHUM", "WHOLE_WHEAT", "ALL_PURPOSE");
+
     private final Repository repository;
 
     public userService(Repository repository) {
@@ -39,6 +47,155 @@ public class userService {
 
     public List<Users> fetchUsers() {
         return repository.findAllUsers();
+    }
+
+    public Users register(String name, String email, String password, String userType) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("name is required");
+        }
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("email is required");
+        }
+        if (password == null || password.isBlank()) {
+            throw new IllegalArgumentException("password is required");
+        }
+        String normalizedType = userType == null ? "" : userType.trim().toLowerCase();
+        if (!normalizedType.equals("customer") && !normalizedType.equals("employee")) {
+            throw new IllegalArgumentException("userType must be 'customer' or 'employee'");
+        }
+        if (repository.findUserByEmail(email).isPresent()) {
+            throw new IllegalStateException("email already registered: " + email);
+        }
+        Users user = new Users();
+        user.setname(name);
+        user.setemail(email);
+        user.setpassword(password);
+        user.setcreatedat(LocalDateTime.now());
+        user = repository.saveUser(user);
+
+        Role role = repository.findRoleByName(normalizedType).orElseGet(() -> {
+            Role r = new Role();
+            r.setRole(normalizedType);
+            r.setFullName(normalizedType);
+            return repository.saveRole(r);
+        });
+
+        UserRole ur = new UserRole();
+        ur.setUser(user);
+        ur.setRole(role);
+        repository.saveUserRole(ur);
+
+        return user;
+    }
+
+    public Users login(String email, String password) {
+        if (email == null || password == null) {
+            throw new IllegalArgumentException("email and password are required");
+        }
+        Users user = repository.findUserByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("invalid email or password"));
+        if (!password.equals(user.getpassword())) {
+            throw new IllegalArgumentException("invalid email or password");
+        }
+        return user;
+    }
+
+    public CartItem addToCart(int userid, long productId, int quantity,
+                              String sweetenerType, Integer sweetenerPercent,
+                              String flourType) {
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("quantity must be positive");
+        }
+        Users user = repository.findUserById(userid)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userid));
+        Product product = repository.findProductById(productId)
+                .orElseThrow(() -> new IllegalArgumentException("Product not found: " + productId));
+        if (product.getStock() != null && product.getStock() < quantity) {
+            throw new IllegalArgumentException("Only " + product.getStock() + " in stock");
+        }
+
+        String sweetener = normalizeCode(sweetenerType);
+        String flour = normalizeCode(flourType);
+        if (sweetener != null && !ALLOWED_SWEETENERS.contains(sweetener)) {
+            throw new IllegalArgumentException("Invalid sweetener: " + sweetenerType);
+        }
+        if (flour != null && !ALLOWED_FLOURS.contains(flour)) {
+            throw new IllegalArgumentException("Invalid flour: " + flourType);
+        }
+        if (sweetenerPercent != null && (sweetenerPercent < 0 || sweetenerPercent > 100)) {
+            throw new IllegalArgumentException("sweetenerPercent must be between 0 and 100");
+        }
+
+        List<Cart> carts = repository.findCartsByUserId(userid);
+        Cart cart;
+        if (carts.isEmpty()) {
+            cart = new Cart();
+            cart.setUser(user);
+            cart.setCreatedAt(LocalDateTime.now());
+            cart = repository.saveCart(cart);
+        } else {
+            cart = carts.get(0);
+        }
+
+        boolean isCustom = sweetener != null || flour != null || sweetenerPercent != null;
+
+        if (!isCustom) {
+            List<CartItem> existing = repository.findCartItemsByUserId(userid);
+            for (CartItem ci : existing) {
+                if (ci.getProduct() != null
+                        && ci.getProduct().getId().equals(productId)
+                        && ci.getSweetenerType() == null
+                        && ci.getFlourType() == null
+                        && ci.getSweetenerPercent() == null) {
+                    ci.setQuantity((ci.getQuantity() == null ? 0 : ci.getQuantity()) + quantity);
+                    return repository.saveCartItem(ci);
+                }
+            }
+        }
+
+        CartItem item = new CartItem();
+        item.setCart(cart);
+        item.setProduct(product);
+        item.setQuantity(quantity);
+        item.setSweetenerType(sweetener);
+        item.setSweetenerPercent(sweetenerPercent);
+        item.setFlourType(flour);
+        return repository.saveCartItem(item);
+    }
+
+    private static String normalizeCode(String raw) {
+        if (raw == null) return null;
+        String trimmed = raw.trim();
+        return trimmed.isEmpty() ? null : trimmed.toUpperCase();
+    }
+
+    public List<Map<String, Object>> fetchAllProducts() {
+        List<Product> products = repository.findAllProducts();
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Product p : products) {
+            Map<String, Object> item = new java.util.HashMap<>();
+            item.put("id", p.getId());
+            item.put("name", p.getName());
+            item.put("description", p.getDescription());
+            item.put("price", p.getPrice());
+            item.put("stock", p.getStock());
+            item.put("category", p.getCategory() == null ? null : Map.of(
+                    "id", p.getCategory().getId(),
+                    "name", p.getCategory().getName() == null ? "" : p.getCategory().getName()));
+            List<ProductImage> images = repository.findImagesByProductId(p.getId());
+            item.put("imageUrl", images.isEmpty() ? null : images.get(0).getImageUrl());
+            result.add(item);
+        }
+        return result;
+    }
+
+    public List<String> fetchRoleNamesForUser(int userid) {
+        return repository.findRolesByUserId(userid).stream()
+                .map(Role::getRole)
+                .filter(r -> r != null && !r.isBlank())
+                .map(String::toLowerCase)
+                .distinct()
+                .collect(Collectors.toList());
     }
 
     public List<Role> fetchRoles(String department) {
@@ -121,6 +278,7 @@ public class userService {
 
     public List<Product> saveProduct(Map<String, Object> request) {
         Users creator = resolveUser((Integer) request.get("userId"));
+        requireEmployee(creator);
         String name = (String) request.get("name");
         String description = (String) request.get("description");
         List<Map<String, Object>> items = (List<Map<String, Object>>) request.get("items");
@@ -129,6 +287,7 @@ public class userService {
 
     public List<Product> saveProducts(Map<String, Object> request) {
         Users creator = resolveUser((Integer) request.get("userId"));
+        requireEmployee(creator);
         List<Map<String, Object>> products = (List<Map<String, Object>>) request.get("products");
         List<Product> saved = new ArrayList<>();
         for (Map<String, Object> p : products) {
@@ -146,6 +305,15 @@ public class userService {
         }
         return repository.findUserById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+    }
+
+    private void requireEmployee(Users user) {
+        boolean isEmployee = repository.findRolesByUserId(user.getuserid()).stream()
+                .anyMatch(r -> r.getRole() != null
+                        && r.getRole().equalsIgnoreCase("employee"));
+        if (!isEmployee) {
+            throw new SecurityException("Only employees can add items to sell");
+        }
     }
 
     public Map<String, Object> cleanupForUser(int userid) {
