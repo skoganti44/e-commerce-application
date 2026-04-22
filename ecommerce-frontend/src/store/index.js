@@ -4,7 +4,6 @@ import authReducer from './slices/authSlice.js';
 import usersReducer from './slices/usersSlice.js';
 import productsReducer from './slices/productsSlice.js';
 import cartReducer from './slices/cartSlice.js';
-import ordersReducer from './slices/ordersSlice.js';
 import paymentsReducer from './slices/paymentsSlice.js';
 
 export const store = configureStore({
@@ -14,7 +13,6 @@ export const store = configureStore({
     users: usersReducer,
     products: productsReducer,
     cart: cartReducer,
-    orders: ordersReducer,
     payments: paymentsReducer,
   },
 });

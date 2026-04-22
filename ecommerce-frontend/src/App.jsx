@@ -7,7 +7,7 @@ import Login from './pages/Login.jsx';
 import Products from './pages/Products.jsx';
 import ManageProducts from './pages/ManageProducts.jsx';
 import Cart from './pages/Cart.jsx';
-import Orders from './pages/Orders.jsx';
+import Checkout from './pages/Checkout.jsx';
 import Payments from './pages/Payments.jsx';
 
 export default function App() {
@@ -34,10 +34,10 @@ export default function App() {
           }
         />
         <Route
-          path="/orders"
+          path="/checkout"
           element={
             <RequireAuth>
-              <Orders />
+              <Checkout />
             </RequireAuth>
           }
         />

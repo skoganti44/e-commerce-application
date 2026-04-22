@@ -19,8 +19,15 @@ export const fetchCart = (userid) =>
 export const addToCart = (payload) =>
   client.post('/cart/add', payload).then((r) => r.data);
 
-export const fetchOrders = (userid) =>
-  client.get('/orders', { params: { userid } }).then((r) => r.data);
+export const updateCartItem = (userid, cartItemId, quantity) =>
+  client
+    .post('/cart/item/update', { userid, cartItemId, quantity })
+    .then((r) => r.data);
+
+export const removeCartItem = (userid, itemId) =>
+  client
+    .delete('/cart/item', { params: { userid, itemId } })
+    .then((r) => r.data);
 
 export const fetchPayments = (userid, includeAll = false) =>
   client
@@ -38,3 +45,16 @@ export const saveProducts = (payload) =>
 
 export const cleanupForUser = (userid) =>
   client.delete('/cleanup', { params: { userid } }).then((r) => r.data);
+
+export const saveShippingAddress = (userid, address) =>
+  client
+    .post('/shipping-address', { userid, address })
+    .then((r) => r.data);
+
+export const fetchShippingAddress = (userid) =>
+  client
+    .get('/shipping-address', { params: { userid } })
+    .then((r) => r.data);
+
+export const checkout = (payload) =>
+  client.post('/checkout', payload).then((r) => r.data);

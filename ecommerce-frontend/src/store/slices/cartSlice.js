@@ -8,11 +8,35 @@ export const loadCart = createAsyncThunk(
 
 export const addToCart = createAsyncThunk(
   'cart/add',
-  async ({ userid, productId, quantity, customization }, { rejectWithValue }) => {
+  async (payload, { rejectWithValue }) => {
     try {
-      return await api.addToCart({ userid, productId, quantity, customization });
+      return await api.addToCart(payload);
     } catch (err) {
       const msg = err?.response?.data?.error || err.message || 'Failed to add to cart';
+      return rejectWithValue(msg);
+    }
+  }
+);
+
+export const updateCartItemQty = createAsyncThunk(
+  'cart/updateQty',
+  async ({ userid, cartItemId, quantity }, { rejectWithValue }) => {
+    try {
+      return await api.updateCartItem(userid, cartItemId, quantity);
+    } catch (err) {
+      const msg = err?.response?.data?.error || err.message || 'Failed to update cart';
+      return rejectWithValue(msg);
+    }
+  }
+);
+
+export const removeCartItem = createAsyncThunk(
+  'cart/remove',
+  async ({ userid, cartItemId }, { rejectWithValue }) => {
+    try {
+      return await api.removeCartItem(userid, cartItemId);
+    } catch (err) {
+      const msg = err?.response?.data?.error || err.message || 'Failed to remove item';
       return rejectWithValue(msg);
     }
   }
@@ -23,6 +47,8 @@ const cartSlice = createSlice({
   initialState: {
     cart: [],
     items: [],
+    itemTotals: {},
+    totals: { subtotal: 0, itemCount: 0, totalQuantity: 0 },
     status: 'idle',
     error: null,
     addStatus: 'idle',
@@ -33,6 +59,8 @@ const cartSlice = createSlice({
     clearCart(state) {
       state.cart = [];
       state.items = [];
+      state.itemTotals = {};
+      state.totals = { subtotal: 0, itemCount: 0, totalQuantity: 0 };
       state.status = 'idle';
       state.error = null;
     },
@@ -51,6 +79,12 @@ const cartSlice = createSlice({
         state.status = 'succeeded';
         state.cart = action.payload?.cart ?? [];
         state.items = action.payload?.items ?? [];
+        state.itemTotals = action.payload?.itemTotals ?? {};
+        state.totals = action.payload?.totals ?? {
+          subtotal: 0,
+          itemCount: 0,
+          totalQuantity: 0,
+        };
       })
       .addCase(loadCart.rejected, (state, action) => {
         state.status = 'failed';
@@ -64,10 +98,30 @@ const cartSlice = createSlice({
         state.addStatus = 'succeeded';
         state.cart = action.payload?.cart ?? state.cart;
         state.items = action.payload?.items ?? state.items;
+        state.itemTotals = action.payload?.itemTotals ?? state.itemTotals;
+        state.totals = action.payload?.totals ?? state.totals;
         state.lastAddedAt = Date.now();
       })
       .addCase(addToCart.rejected, (state, action) => {
         state.addStatus = 'failed';
+        state.addError = action.payload || action.error.message;
+      })
+      .addCase(updateCartItemQty.fulfilled, (state, action) => {
+        state.cart = action.payload?.cart ?? state.cart;
+        state.items = action.payload?.items ?? state.items;
+        state.itemTotals = action.payload?.itemTotals ?? state.itemTotals;
+        state.totals = action.payload?.totals ?? state.totals;
+      })
+      .addCase(updateCartItemQty.rejected, (state, action) => {
+        state.addError = action.payload || action.error.message;
+      })
+      .addCase(removeCartItem.fulfilled, (state, action) => {
+        state.cart = action.payload?.cart ?? state.cart;
+        state.items = action.payload?.items ?? state.items;
+        state.itemTotals = action.payload?.itemTotals ?? state.itemTotals;
+        state.totals = action.payload?.totals ?? state.totals;
+      })
+      .addCase(removeCartItem.rejected, (state, action) => {
         state.addError = action.payload || action.error.message;
       });
   },
