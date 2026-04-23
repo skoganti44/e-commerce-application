@@ -13,7 +13,7 @@ import {
 } from '@mui/material';
 import BakeryDiningIcon from '@mui/icons-material/BakeryDining';
 import LogoutIcon from '@mui/icons-material/Logout';
-import { logout, selectCurrentUser } from '../store/slices/authSlice.js';
+import { logout, selectCurrentUser, hasRole } from '../store/slices/authSlice.js';
 import { setActiveUserId } from '../store/slices/sessionSlice.js';
 
 const navLinks = [
@@ -27,12 +27,16 @@ const navLinks = [
     requiresRole: 'employee',
     hint: 'Only employees can add items to sell',
   },
+  {
+    to: '/add-products',
+    label: 'Add Products',
+    requiresAuth: true,
+    requiresRole: 'employee',
+    hint: 'Quick-add a product with name, price, description and image',
+  },
 ];
 
-// Requested: https://www.freepik.com/premium-ai-image/cute-cartoon-girl-happily-baking-colorful-cookies-clean-white-background_323633675.htm
-// Save the downloaded image as ecommerce-frontend/public/dashboard-bg.jpg to use it.
-const DASHBOARD_REMOTE_BG =
-  'https://images.unsplash.com/photo-1486427944299-d1955d23e34d?auto=format&fit=crop&w=1920&q=80';
+const AFTER_LOGIN_BG = '/afterlogin-bake.png';
 
 export default function Layout() {
   const dispatch = useDispatch();
@@ -54,11 +58,10 @@ export default function Layout() {
         background: loggedIn
           ? `linear-gradient(
                 180deg,
-                rgba(255,255,255,0.88) 0%,
-                rgba(255,255,255,0.78) 100%
+                rgba(255,255,255,0.82) 0%,
+                rgba(255,255,255,0.72) 100%
               ),
-              url('/dashboard-bg.jpg'),
-              url('${DASHBOARD_REMOTE_BG}')`
+              url('${AFTER_LOGIN_BG}')`
           : undefined,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
@@ -100,13 +103,8 @@ export default function Layout() {
             {navLinks
               .filter((link) => {
                 if (link.requiresAuth && !currentUser) return false;
-                if (link.requiresRole) {
-                  const userRoles = (currentUser?.roles || []).map((r) =>
-                    r.toLowerCase()
-                  );
-                  if (!userRoles.includes(link.requiresRole.toLowerCase()))
-                    return false;
-                }
+                if (link.requiresRole && !hasRole(currentUser, link.requiresRole))
+                  return false;
                 return true;
               })
               .map((link) => {

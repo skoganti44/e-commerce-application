@@ -6,6 +6,7 @@ import Register from './pages/Register.jsx';
 import Login from './pages/Login.jsx';
 import Products from './pages/Products.jsx';
 import ManageProducts from './pages/ManageProducts.jsx';
+import AddProducts from './pages/AddProducts.jsx';
 import Cart from './pages/Cart.jsx';
 import Checkout from './pages/Checkout.jsx';
 import Payments from './pages/Payments.jsx';
@@ -54,6 +55,14 @@ export default function App() {
           element={
             <RequireAuth role="employee">
               <ManageProducts />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/add-products"
+          element={
+            <RequireAuth role="employee">
+              <AddProducts />
             </RequireAuth>
           }
         />

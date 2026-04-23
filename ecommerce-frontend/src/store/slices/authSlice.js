@@ -80,4 +80,23 @@ const authSlice = createSlice({
 
 export const { logout, clearAuthError } = authSlice.actions;
 export const selectCurrentUser = (state) => state.auth.currentUser;
+
+const normalizeRoles = (user) =>
+  (user?.roles || [])
+    .map((r) => (r == null ? '' : String(r).trim().toLowerCase()))
+    .filter((r) => r.length > 0);
+
+export const isCustomer = (user) => normalizeRoles(user).includes('customer');
+export const isEmployee = (user) => {
+  const roles = normalizeRoles(user);
+  if (roles.length === 0) return false;
+  return roles.some((r) => r !== 'customer');
+};
+export const hasRole = (user, role) => {
+  const expected = String(role || '').toLowerCase();
+  if (expected === 'customer') return isCustomer(user);
+  if (expected === 'employee') return isEmployee(user);
+  return isEmployee(user);
+};
+
 export default authSlice.reducer;
