@@ -29,6 +29,18 @@ public class Orders {
 
     private String status;
 
+    @Column(name = "channel")
+    private String channel;
+
+    @Column(name = "kitchen_status")
+    private String kitchenStatus;
+
+    @Column(name = "customer_notes", columnDefinition = "text")
+    private String customerNotes;
+
+    @Column(name = "kitchen_notes", columnDefinition = "text")
+    private String kitchenNotes;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -71,4 +83,26 @@ public class Orders {
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
     }
+
+    public String getChannel() {
+        return channel;
+    }
+
+    public void setChannel(String channel) {
+        this.channel = channel;
+    }
+
+    public String getKitchenStatus() {
+        return kitchenStatus;
+    }
+
+    public void setKitchenStatus(String kitchenStatus) {
+        this.kitchenStatus = kitchenStatus;
+    }
+
+    public String getCustomerNotes() { return customerNotes; }
+    public void setCustomerNotes(String customerNotes) { this.customerNotes = customerNotes; }
+
+    public String getKitchenNotes() { return kitchenNotes; }
+    public void setKitchenNotes(String kitchenNotes) { this.kitchenNotes = kitchenNotes; }
 }

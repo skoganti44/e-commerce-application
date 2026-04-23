@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.example.groceryapi.model.Cart;
 import com.example.groceryapi.model.CartItem;
 import com.example.groceryapi.model.Category;
+import com.example.groceryapi.model.DailyStock;
 import com.example.groceryapi.model.OrderItem;
 import com.example.groceryapi.model.Orders;
 import com.example.groceryapi.model.Payment;
@@ -17,8 +18,11 @@ import com.example.groceryapi.model.ProductAvailable;
 import com.example.groceryapi.model.ProductImage;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.ShippingAddress;
+import com.example.groceryapi.model.Supply;
 import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.Users;
+
+import java.time.LocalDate;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -33,6 +37,8 @@ public class Repository {
 
     private static final String SELECT_ALL_ROLES = "SELECT r FROM Role r";
     private static final String SELECT_ROLE_BY_NAME = "SELECT r FROM Role r WHERE LOWER(r.role) = LOWER(:name)";
+    private static final String SELECT_ROLE_BY_ROLE_AND_DEPARTMENT =
+            "SELECT r FROM Role r WHERE LOWER(r.role) = LOWER(:role) AND LOWER(r.department) = LOWER(:department)";
     private static final String SELECT_ROLES_BY_DEPARTMENT = "SELECT r FROM Role r WHERE r.department = :department";
     private static final String DELETE_ALL_ROLES = "DELETE FROM Role";
 
@@ -52,9 +58,22 @@ public class Repository {
 
     private static final String SELECT_ORDERS_BY_USER_ID = "SELECT o FROM Orders o WHERE o.user.userid = :userid";
     private static final String SELECT_ORDER_ITEMS_BY_USER_ID = "SELECT oi FROM OrderItem oi WHERE oi.order.user.userid = :userid";
+    private static final String SELECT_ORDERS_BY_CHANNEL_AND_KITCHEN_STATUS =
+            "SELECT o FROM Orders o WHERE LOWER(o.channel) = LOWER(:channel) " +
+            "AND LOWER(COALESCE(o.kitchenStatus, 'pending')) IN :statuses " +
+            "ORDER BY o.createdAt ASC";
+    private static final String SELECT_ORDER_ITEMS_BY_ORDER_IDS =
+            "SELECT oi FROM OrderItem oi WHERE oi.order.id IN :orderIds";
+    private static final String SELECT_DAILY_STOCK_BY_DATE =
+            "SELECT ds FROM DailyStock ds WHERE ds.stockDate = :stockDate " +
+            "ORDER BY ds.id ASC";
     private static final String SELECT_ROLES_BY_USER_ID = "SELECT ur.role FROM UserRole ur WHERE ur.user.userid = :userid";
 
     private static final String SELECT_PAYMENTS_BY_USER_ID = "SELECT p FROM Payment p WHERE p.order.user.userid = :userid";
+
+    private static final String SELECT_ALL_SUPPLIES = "SELECT s FROM Supply s ORDER BY s.name ASC";
+    private static final String SELECT_SUPPLY_BY_NAME = "SELECT s FROM Supply s WHERE LOWER(s.name) = LOWER(:name)";
+    private static final String COUNT_SUPPLIES = "SELECT COUNT(s) FROM Supply s";
 
     private static final String DELETE_PAYMENTS_BY_USER_ID = "DELETE FROM Payment p WHERE p.order.id IN (SELECT o.id FROM Orders o WHERE o.user.userid = :userid)";
     private static final String DELETE_ORDER_ITEMS_BY_USER_ID = "DELETE FROM OrderItem oi WHERE oi.order.id IN (SELECT o.id FROM Orders o WHERE o.user.userid = :userid)";
@@ -152,6 +171,14 @@ public class Repository {
         return em.createQuery(SELECT_ROLES_BY_DEPARTMENT, Role.class)
                 .setParameter("department", department)
                 .getResultList();
+    }
+
+    public Optional<Role> findRoleByRoleAndDepartment(String role, String department) {
+        return em.createQuery(SELECT_ROLE_BY_ROLE_AND_DEPARTMENT, Role.class)
+                .setParameter("role", role)
+                .setParameter("department", department)
+                .getResultStream()
+                .findFirst();
     }
 
     public Optional<Role> findRoleByName(String name) {
@@ -293,6 +320,10 @@ public class Repository {
                 .getResultList();
     }
 
+    public Optional<Orders> findOrderById(long id) {
+        return Optional.ofNullable(em.find(Orders.class, id));
+    }
+
     public Orders saveOrder(Orders order) {
         if (order.getId() == null) {
             em.persist(order);
@@ -319,6 +350,40 @@ public class Repository {
         return em.createQuery(SELECT_ORDER_ITEMS_BY_USER_ID, OrderItem.class)
                 .setParameter("userid", userid)
                 .getResultList();
+    }
+
+    public List<Orders> findOrdersByChannelAndKitchenStatuses(String channel, List<String> statuses) {
+        return em.createQuery(SELECT_ORDERS_BY_CHANNEL_AND_KITCHEN_STATUS, Orders.class)
+                .setParameter("channel", channel)
+                .setParameter("statuses", statuses)
+                .getResultList();
+    }
+
+    public List<OrderItem> findOrderItemsByOrderIds(List<Long> orderIds) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return List.of();
+        }
+        return em.createQuery(SELECT_ORDER_ITEMS_BY_ORDER_IDS, OrderItem.class)
+                .setParameter("orderIds", orderIds)
+                .getResultList();
+    }
+
+    public List<DailyStock> findDailyStockByDate(LocalDate stockDate) {
+        return em.createQuery(SELECT_DAILY_STOCK_BY_DATE, DailyStock.class)
+                .setParameter("stockDate", stockDate)
+                .getResultList();
+    }
+
+    public Optional<DailyStock> findDailyStockById(long id) {
+        return Optional.ofNullable(em.find(DailyStock.class, id));
+    }
+
+    public DailyStock saveDailyStock(DailyStock ds) {
+        if (ds.getId() == null) {
+            em.persist(ds);
+            return ds;
+        }
+        return em.merge(ds);
     }
 
     public List<Role> findRolesByUserId(int userid) {
@@ -365,5 +430,35 @@ public class Repository {
         return em.createQuery(DELETE_ORDERS_BY_USER_ID)
                 .setParameter("userid", userid)
                 .executeUpdate();
+    }
+
+    public List<Supply> findAllSupplies() {
+        return em.createQuery(SELECT_ALL_SUPPLIES, Supply.class).getResultList();
+    }
+
+    public Optional<Supply> findSupplyById(long id) {
+        return Optional.ofNullable(em.find(Supply.class, id));
+    }
+
+    public Optional<Supply> findSupplyByName(String name) {
+        if (name == null || name.isBlank()) {
+            return Optional.empty();
+        }
+        return em.createQuery(SELECT_SUPPLY_BY_NAME, Supply.class)
+                .setParameter("name", name.trim())
+                .getResultStream()
+                .findFirst();
+    }
+
+    public long countSupplies() {
+        return em.createQuery(COUNT_SUPPLIES, Long.class).getSingleResult();
+    }
+
+    public Supply saveSupply(Supply supply) {
+        if (supply.getId() == null) {
+            em.persist(supply);
+            return supply;
+        }
+        return em.merge(supply);
     }
 }
