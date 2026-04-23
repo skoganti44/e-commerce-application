@@ -39,6 +39,12 @@ public class Product {
     @JoinColumn(name = "created_by_userid")
     private Users createdBy;
 
+    @Column(name = "supported_flours")
+    private String supportedFlours;
+
+    @Column(name = "supported_sweeteners")
+    private String supportedSweeteners;
+
     public Long getId() {
         return id;
     }
@@ -101,5 +107,21 @@ public class Product {
 
     public void setCreatedBy(Users createdBy) {
         this.createdBy = createdBy;
+    }
+
+    public String getSupportedFlours() {
+        return supportedFlours;
+    }
+
+    public void setSupportedFlours(String supportedFlours) {
+        this.supportedFlours = supportedFlours;
+    }
+
+    public String getSupportedSweeteners() {
+        return supportedSweeteners;
+    }
+
+    public void setSupportedSweeteners(String supportedSweeteners) {
+        this.supportedSweeteners = supportedSweeteners;
     }
 }

@@ -6,6 +6,7 @@ package com.example.groceryapi.service;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -25,6 +26,7 @@ import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.ProductAvailable;
 import com.example.groceryapi.model.ProductImage;
 import com.example.groceryapi.model.Role;
+import com.example.groceryapi.model.ShippingAddress;
 import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.Users;
 import com.example.groceryapi.repository.Repository;
@@ -38,6 +40,32 @@ public class userService {
     private static final Set<String> ALLOWED_FLOURS = Set.of(
             "FINGER_MILLET", "BAJRA_MILLET", "LITTLE_MILLET",
             "SORGHUM", "WHOLE_WHEAT", "ALL_PURPOSE");
+
+    private static final Map<String, BigDecimal> SWEETENER_ADDON = Map.of(
+            "CANE_SUGAR", new BigDecimal("1"),
+            "BROWN_SUGAR", new BigDecimal("1"),
+            "JAGGERY", new BigDecimal("2"),
+            "MAPLE_SYRUP", new BigDecimal("3"),
+            "HONEY", new BigDecimal("3"));
+
+    private static final Map<String, BigDecimal> FLOUR_ADDON = Map.of(
+            "ALL_PURPOSE", new BigDecimal("1"),
+            "WHOLE_WHEAT", new BigDecimal("2"),
+            "FINGER_MILLET", new BigDecimal("5"),
+            "BAJRA_MILLET", new BigDecimal("5"),
+            "LITTLE_MILLET", new BigDecimal("5"),
+            "SORGHUM", new BigDecimal("5"));
+
+    private static BigDecimal addon(Map<String, BigDecimal> table, String code) {
+        if (code == null) return BigDecimal.ZERO;
+        return table.getOrDefault(code, BigDecimal.ZERO);
+    }
+
+    public static BigDecimal computeUnitPrice(Product product, String sweetenerType, String flourType) {
+        BigDecimal base = product.getPrice() == null ? BigDecimal.ZERO : product.getPrice();
+        return base.add(addon(SWEETENER_ADDON, sweetenerType))
+                .add(addon(FLOUR_ADDON, flourType));
+    }
 
     private final Repository repository;
 
@@ -59,10 +87,8 @@ public class userService {
         if (password == null || password.isBlank()) {
             throw new IllegalArgumentException("password is required");
         }
-        String normalizedType = userType == null ? "" : userType.trim().toLowerCase();
-        if (!normalizedType.equals("customer") && !normalizedType.equals("employee")) {
-            throw new IllegalArgumentException("userType must be 'customer' or 'employee'");
-        }
+        String rawType = userType == null ? "" : userType.trim().toLowerCase();
+        String normalizedType = rawType.equals("customer") ? "customer" : "employee";
         if (repository.findUserByEmail(email).isPresent()) {
             throw new IllegalStateException("email already registered: " + email);
         }
@@ -163,6 +189,39 @@ public class userService {
         return repository.saveCartItem(item);
     }
 
+    public void updateCartItemQuantity(int userid, Long cartItemId, int quantity) {
+        CartItem item = resolveOwnedCartItem(userid, cartItemId);
+        if (quantity <= 0) {
+            repository.deleteCartItem(item);
+            return;
+        }
+        Product product = item.getProduct();
+        if (product != null && product.getStock() != null && product.getStock() < quantity) {
+            throw new IllegalArgumentException("Only " + product.getStock() + " in stock");
+        }
+        item.setQuantity(quantity);
+        repository.saveCartItem(item);
+    }
+
+    public void removeCartItem(int userid, Long cartItemId) {
+        CartItem item = resolveOwnedCartItem(userid, cartItemId);
+        repository.deleteCartItem(item);
+    }
+
+    private CartItem resolveOwnedCartItem(int userid, Long cartItemId) {
+        if (cartItemId == null) {
+            throw new IllegalArgumentException("cartItemId is required");
+        }
+        CartItem item = repository.findCartItemById(cartItemId)
+                .orElseThrow(() -> new IllegalArgumentException("Cart item not found: " + cartItemId));
+        Cart itemCart = item.getCart();
+        Users owner = itemCart == null ? null : itemCart.getUser();
+        if (owner == null || owner.getuserid() != userid) {
+            throw new IllegalArgumentException("Cart item does not belong to user " + userid);
+        }
+        return item;
+    }
+
     private static String normalizeCode(String raw) {
         if (raw == null) return null;
         String trimmed = raw.trim();
@@ -184,6 +243,8 @@ public class userService {
                     "name", p.getCategory().getName() == null ? "" : p.getCategory().getName()));
             List<ProductImage> images = repository.findImagesByProductId(p.getId());
             item.put("imageUrl", images.isEmpty() ? null : images.get(0).getImageUrl());
+            item.put("supportedFlours", splitCodes(p.getSupportedFlours()));
+            item.put("supportedSweeteners", splitCodes(p.getSupportedSweeteners()));
             result.add(item);
         }
         return result;
@@ -211,9 +272,43 @@ public class userService {
             throw new IllegalArgumentException("No cart found for userId: " + userid);
         }
         List<CartItem> items = repository.findCartItemsByUserId(userid);
-        return Map.of(
-                "cart", carts,
-                "items", items);
+
+        Map<Long, Map<String, Object>> itemTotals = new java.util.LinkedHashMap<>();
+        BigDecimal subtotal = BigDecimal.ZERO;
+        int totalQuantity = 0;
+        for (CartItem ci : items) {
+            BigDecimal base = ci.getProduct() == null || ci.getProduct().getPrice() == null
+                    ? BigDecimal.ZERO
+                    : ci.getProduct().getPrice();
+            BigDecimal sAdd = addon(SWEETENER_ADDON, ci.getSweetenerType());
+            BigDecimal fAdd = addon(FLOUR_ADDON, ci.getFlourType());
+            BigDecimal unit = base.add(sAdd).add(fAdd);
+            int qty = ci.getQuantity() == null ? 0 : ci.getQuantity();
+            BigDecimal line = unit.multiply(BigDecimal.valueOf(qty));
+
+            Map<String, Object> per = new java.util.LinkedHashMap<>();
+            per.put("basePrice", base);
+            per.put("sweetenerAddon", sAdd);
+            per.put("flourAddon", fAdd);
+            per.put("unitPrice", unit);
+            per.put("lineTotal", line);
+            itemTotals.put(ci.getId(), per);
+
+            subtotal = subtotal.add(line);
+            totalQuantity += qty;
+        }
+
+        Map<String, Object> totals = new java.util.LinkedHashMap<>();
+        totals.put("subtotal", subtotal);
+        totals.put("itemCount", items.size());
+        totals.put("totalQuantity", totalQuantity);
+
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("cart", carts);
+        result.put("items", items);
+        result.put("itemTotals", itemTotals);
+        result.put("totals", totals);
+        return result;
     }
 
     public List<Payment> fetchPaymentsByUserId(int userid, boolean includeAll) {
@@ -308,12 +403,141 @@ public class userService {
     }
 
     private void requireEmployee(Users user) {
-        boolean isEmployee = repository.findRolesByUserId(user.getuserid()).stream()
-                .anyMatch(r -> r.getRole() != null
-                        && r.getRole().equalsIgnoreCase("employee"));
-        if (!isEmployee) {
+        List<String> roles = repository.findRolesByUserId(user.getuserid()).stream()
+                .map(Role::getRole)
+                .filter(r -> r != null && !r.isBlank())
+                .map(String::toLowerCase)
+                .collect(Collectors.toList());
+        boolean hasNonCustomerRole = roles.stream().anyMatch(r -> !r.equals("customer"));
+        if (!hasNonCustomerRole) {
             throw new SecurityException("Only employees can add items to sell");
         }
+    }
+
+    private static final Set<String> ALLOWED_PAYMENT_METHODS = Set.of(
+            "DEBIT_CARD", "CREDIT_CARD", "GIFT_CARD", "COD");
+
+    public ShippingAddress saveShippingAddress(int userid, Map<String, Object> body) {
+        Users user = repository.findUserById(userid)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userid));
+        ShippingAddress address = buildAddress(body);
+        validateAddress(address);
+        address.setUser(user);
+        return repository.saveShippingAddress(address);
+    }
+
+    public ShippingAddress findLatestShippingAddress(int userid) {
+        repository.findUserById(userid)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userid));
+        return repository.findLatestShippingAddressByUserId(userid).orElse(null);
+    }
+
+    public Map<String, Object> checkout(int userid, String paymentMethodRaw,
+                                        Map<String, Object> addressBody,
+                                        String cardLast4) {
+        Users user = repository.findUserById(userid)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userid));
+
+        String paymentMethod = normalizeCode(paymentMethodRaw);
+        if (paymentMethod == null || !ALLOWED_PAYMENT_METHODS.contains(paymentMethod)) {
+            throw new IllegalArgumentException("Invalid payment method: " + paymentMethodRaw);
+        }
+
+        ShippingAddress address = buildAddress(addressBody);
+        validateAddress(address);
+        address.setUser(user);
+
+        List<CartItem> cartItems = repository.findCartItemsByUserId(userid);
+        if (cartItems.isEmpty()) {
+            throw new IllegalArgumentException("Cart is empty for user: " + userid);
+        }
+
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        for (CartItem ci : cartItems) {
+            BigDecimal unit = computeUnitPrice(ci.getProduct(), ci.getSweetenerType(), ci.getFlourType());
+            int qty = ci.getQuantity() == null ? 0 : ci.getQuantity();
+            totalAmount = totalAmount.add(unit.multiply(BigDecimal.valueOf(qty)));
+        }
+
+        Orders order = new Orders();
+        order.setUser(user);
+        order.setTotalAmount(totalAmount);
+        order.setStatus("COD".equals(paymentMethod) ? "PENDING" : "CONFIRMED");
+        order = repository.saveOrder(order);
+
+        for (CartItem ci : cartItems) {
+            BigDecimal unit = computeUnitPrice(ci.getProduct(), ci.getSweetenerType(), ci.getFlourType());
+            OrderItem oi = new OrderItem();
+            oi.setOrder(order);
+            oi.setProduct(ci.getProduct());
+            oi.setQuantity(ci.getQuantity());
+            oi.setPrice(unit);
+            repository.saveOrderItem(oi);
+        }
+
+        Payment payment = new Payment();
+        payment.setOrder(order);
+        payment.setAmount(totalAmount);
+        String methodLabel = paymentMethod;
+        if ((paymentMethod.equals("DEBIT_CARD") || paymentMethod.equals("CREDIT_CARD"))
+                && cardLast4 != null && !cardLast4.isBlank()) {
+            methodLabel = paymentMethod + " ****" + cardLast4;
+        }
+        payment.setPaymentMethod(methodLabel);
+        payment.setStatus("COD".equals(paymentMethod) ? "PENDING" : "SUCCESS");
+        payment = repository.savePayment(payment);
+
+        address.setOrder(order);
+        ShippingAddress savedAddress = repository.saveShippingAddress(address);
+
+        repository.deleteCartItemsByUserId(userid);
+
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("orderId", order.getId());
+        result.put("paymentId", payment.getId());
+        result.put("addressId", savedAddress.getId());
+        result.put("totalAmount", totalAmount);
+        result.put("status", order.getStatus());
+        result.put("paymentStatus", payment.getStatus());
+        result.put("paymentMethod", payment.getPaymentMethod());
+        return result;
+    }
+
+    private ShippingAddress buildAddress(Map<String, Object> body) {
+        if (body == null) {
+            throw new IllegalArgumentException("Address is required");
+        }
+        ShippingAddress a = new ShippingAddress();
+        a.setFullName(trimToNull(body.get("fullName")));
+        a.setPhone(trimToNull(body.get("phone")));
+        a.setLine1(trimToNull(body.get("line1")));
+        a.setLine2(trimToNull(body.get("line2")));
+        a.setLandmark(trimToNull(body.get("landmark")));
+        a.setCity(trimToNull(body.get("city")));
+        a.setState(trimToNull(body.get("state")));
+        a.setPincode(trimToNull(body.get("pincode")));
+        a.setCountry(trimToNull(body.get("country")));
+        a.setInstructions(trimToNull(body.get("instructions")));
+        String type = trimToNull(body.get("addressType"));
+        a.setAddressType(type == null ? "HOME" : type.toUpperCase());
+        return a;
+    }
+
+    private static String trimToNull(Object v) {
+        if (v == null) return null;
+        String s = v.toString().trim();
+        return s.isEmpty() ? null : s;
+    }
+
+    private void validateAddress(ShippingAddress a) {
+        if (a.getFullName() == null) throw new IllegalArgumentException("fullName is required");
+        if (a.getPhone() == null || !a.getPhone().matches("\\d{10}"))
+            throw new IllegalArgumentException("phone must be 10 digits");
+        if (a.getLine1() == null) throw new IllegalArgumentException("line1 is required");
+        if (a.getCity() == null) throw new IllegalArgumentException("city is required");
+        if (a.getState() == null) throw new IllegalArgumentException("state is required");
+        if (a.getPincode() == null || !a.getPincode().matches("\\d{5}(-\\d{4})?"))
+            throw new IllegalArgumentException("ZIP must be 5 digits or ZIP+4 (e.g. 12345 or 12345-6789)");
     }
 
     public Map<String, Object> cleanupForUser(int userid) {
@@ -387,6 +611,10 @@ public class userService {
             product.setStock(((Number) item.get("stock")).intValue());
             product.setCategory(category);
             product.setCreatedBy(creator);
+            product.setSupportedFlours(
+                    normalizeCodeList(item.get("supportedFlours"), ALLOWED_FLOURS, "flour"));
+            product.setSupportedSweeteners(
+                    normalizeCodeList(item.get("supportedSweeteners"), ALLOWED_SWEETENERS, "sweetener"));
             product = repository.saveProduct(product);
 
             ProductImage image = new ProductImage();
@@ -397,5 +625,36 @@ public class userService {
             saved.add(product);
         }
         return saved;
+    }
+
+    private static List<String> splitCodes(String csv) {
+        if (csv == null || csv.isBlank()) return new ArrayList<>();
+        return Arrays.stream(csv.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
+    }
+
+    private String normalizeCodeList(Object raw, Set<String> allowed, String label) {
+        if (raw == null) return null;
+        List<String> values;
+        if (raw instanceof List) {
+            values = ((List<?>) raw).stream()
+                    .map(v -> v == null ? null : v.toString())
+                    .collect(Collectors.toList());
+        } else {
+            values = Arrays.asList(raw.toString().split(","));
+        }
+        List<String> cleaned = values.stream()
+                .map(userService::normalizeCode)
+                .filter(v -> v != null && !v.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+        for (String code : cleaned) {
+            if (!allowed.contains(code)) {
+                throw new IllegalArgumentException("Invalid " + label + ": " + code);
+            }
+        }
+        return cleaned.isEmpty() ? null : String.join(",", cleaned);
     }
 }

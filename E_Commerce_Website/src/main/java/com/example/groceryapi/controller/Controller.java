@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.groceryapi.model.Payment;
 import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.Role;
+import com.example.groceryapi.model.ShippingAddress;
 import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.Users;
 import com.example.groceryapi.service.userService;
@@ -107,6 +108,32 @@ public class Controller {
         }
     }
 
+    @PostMapping(value = "/cart/item/update", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> updateCartItem(@RequestBody Map<String, Object> body) {
+        try {
+            int userid = ((Number) body.get("userid")).intValue();
+            Long cartItemId = body.get("cartItemId") == null
+                    ? null : ((Number) body.get("cartItemId")).longValue();
+            int quantity = body.get("quantity") == null ? 0 : ((Number) body.get("quantity")).intValue();
+            userService.updateCartItemQuantity(userid, cartItemId, quantity);
+            return ResponseEntity.ok(userService.fetchCartByUserId(userid));
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid request" : e.getMessage()));
+        }
+    }
+
+    @DeleteMapping(value = "/cart/item", produces = "application/json")
+    public ResponseEntity<?> removeCartItem(@RequestParam int userid,
+                                            @RequestParam("itemId") Long itemId) {
+        try {
+            userService.removeCartItem(userid, itemId);
+            return ResponseEntity.ok(userService.fetchCartByUserId(userid));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @GetMapping(value = "/orders", headers = "Accept=application/json")
     public ResponseEntity<Map<String, Object>> fetchOrders(@RequestParam int userid) {
         try {
@@ -164,5 +191,67 @@ public class Controller {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
         }
+    }
+
+    @PostMapping(value = "/shipping-address", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> saveShippingAddress(@RequestBody Map<String, Object> body) {
+        try {
+            int userid = ((Number) body.get("userid")).intValue();
+            @SuppressWarnings("unchecked")
+            Map<String, Object> addressBody = (Map<String, Object>) body.get("address");
+            ShippingAddress saved = userService.saveShippingAddress(userid, addressBody);
+            return ResponseEntity.ok(toPublicAddress(saved));
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid request" : e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/shipping-address", headers = "Accept=application/json")
+    public ResponseEntity<?> getLatestShippingAddress(@RequestParam int userid) {
+        try {
+            ShippingAddress a = userService.findLatestShippingAddress(userid);
+            if (a == null) {
+                return ResponseEntity.ok(Map.of());
+            }
+            return ResponseEntity.ok(toPublicAddress(a));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/checkout", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> checkout(@RequestBody Map<String, Object> body) {
+        try {
+            int userid = ((Number) body.get("userid")).intValue();
+            String paymentMethod = (String) body.get("paymentMethod");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> addressBody = (Map<String, Object>) body.get("address");
+            String cardLast4 = (String) body.get("cardLast4");
+            Map<String, Object> result = userService.checkout(userid, paymentMethod, addressBody, cardLast4);
+            return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid request" : e.getMessage()));
+        }
+    }
+
+    private Map<String, Object> toPublicAddress(ShippingAddress a) {
+        Map<String, Object> m = new java.util.LinkedHashMap<>();
+        m.put("id", a.getId());
+        m.put("fullName", a.getFullName());
+        m.put("phone", a.getPhone());
+        m.put("line1", a.getLine1());
+        m.put("line2", a.getLine2());
+        m.put("landmark", a.getLandmark());
+        m.put("city", a.getCity());
+        m.put("state", a.getState());
+        m.put("pincode", a.getPincode());
+        m.put("country", a.getCountry());
+        m.put("instructions", a.getInstructions());
+        m.put("addressType", a.getAddressType());
+        m.put("orderId", a.getOrder() == null ? null : a.getOrder().getId());
+        m.put("createdAt", a.getCreatedAt() == null ? null : a.getCreatedAt().toString());
+        return m;
     }
 }

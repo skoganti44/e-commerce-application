@@ -16,6 +16,7 @@ import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.ProductAvailable;
 import com.example.groceryapi.model.ProductImage;
 import com.example.groceryapi.model.Role;
+import com.example.groceryapi.model.ShippingAddress;
 import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.Users;
 
@@ -59,6 +60,21 @@ public class Repository {
     private static final String DELETE_ORDER_ITEMS_BY_USER_ID = "DELETE FROM OrderItem oi WHERE oi.order.id IN (SELECT o.id FROM Orders o WHERE o.user.userid = :userid)";
     private static final String DELETE_ORDERS_BY_USER_ID = "DELETE FROM Orders o WHERE o.user.userid = :userid";
 
+    private static final String SELECT_LATEST_SHIPPING_ADDRESS_BY_USER_ID =
+            "SELECT sa FROM ShippingAddress sa WHERE sa.user.userid = :userid ORDER BY sa.id DESC";
+    private static final String DELETE_CART_ITEMS_BY_USER_ID =
+            "DELETE FROM CartItem ci WHERE ci.cart.id IN (SELECT c.id FROM Cart c WHERE c.user.userid = :userid)";
+
+    private static final String DELETE_ALL_PAYMENTS = "DELETE FROM Payment";
+    private static final String DELETE_ALL_SHIPPING_ADDRESSES = "DELETE FROM ShippingAddress";
+    private static final String DELETE_ALL_ORDER_ITEMS = "DELETE FROM OrderItem";
+    private static final String DELETE_ALL_ORDERS = "DELETE FROM Orders";
+    private static final String DELETE_ALL_CART_ITEMS = "DELETE FROM CartItem";
+    private static final String DELETE_ALL_CARTS = "DELETE FROM Cart";
+    private static final String DELETE_ALL_PRODUCT_IMAGES = "DELETE FROM ProductImage";
+    private static final String DELETE_ALL_PRODUCTS_AVAILABLE = "DELETE FROM ProductAvailable";
+    private static final String DELETE_ALL_PRODUCTS = "DELETE FROM Product";
+
     @PersistenceContext
     private EntityManager em;
 
@@ -93,7 +109,39 @@ public class Repository {
     }
 
     public void deleteAllUsers() {
+        em.createQuery(DELETE_ALL_SHIPPING_ADDRESSES).executeUpdate();
+        em.createQuery(DELETE_ALL_PAYMENTS).executeUpdate();
+        em.createQuery(DELETE_ALL_ORDER_ITEMS).executeUpdate();
+        em.createQuery(DELETE_ALL_ORDERS).executeUpdate();
+        em.createQuery(DELETE_ALL_CART_ITEMS).executeUpdate();
+        em.createQuery(DELETE_ALL_CARTS).executeUpdate();
+        em.createQuery(DELETE_ALL_PRODUCT_IMAGES).executeUpdate();
+        em.createQuery(DELETE_ALL_PRODUCTS_AVAILABLE).executeUpdate();
+        em.createQuery(DELETE_ALL_PRODUCTS).executeUpdate();
+        em.createQuery(DELETE_ALL_USER_ROLES).executeUpdate();
         em.createQuery(DELETE_ALL_USERS).executeUpdate();
+    }
+
+    public ShippingAddress saveShippingAddress(ShippingAddress address) {
+        if (address.getId() == null) {
+            em.persist(address);
+            return address;
+        }
+        return em.merge(address);
+    }
+
+    public Optional<ShippingAddress> findLatestShippingAddressByUserId(int userid) {
+        return em.createQuery(SELECT_LATEST_SHIPPING_ADDRESS_BY_USER_ID, ShippingAddress.class)
+                .setParameter("userid", userid)
+                .setMaxResults(1)
+                .getResultStream()
+                .findFirst();
+    }
+
+    public int deleteCartItemsByUserId(int userid) {
+        return em.createQuery(DELETE_CART_ITEMS_BY_USER_ID)
+                .setParameter("userid", userid)
+                .executeUpdate();
     }
 
     public List<Role> findAllRoles() {
@@ -222,6 +270,15 @@ public class Repository {
             return item;
         }
         return em.merge(item);
+    }
+
+    public Optional<CartItem> findCartItemById(Long id) {
+        return Optional.ofNullable(em.find(CartItem.class, id));
+    }
+
+    public void deleteCartItem(CartItem item) {
+        CartItem managed = em.contains(item) ? item : em.merge(item);
+        em.remove(managed);
     }
 
     public List<Cart> findCartsByUserId(int userid) {

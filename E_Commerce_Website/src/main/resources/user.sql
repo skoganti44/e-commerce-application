@@ -41,3 +41,22 @@ INSERT INTO "userRole" (userid, roleid) VALUES
     (1, 2),   -- Kunal Sharma → Manager, Fresh Products (Joe Jonnas)
     (1, 3),   -- Kunal Sharma → sales Manager, Fresh Products (Steve Wooten)
     (2, 1);   -- Pinky Jain   → Manager, Fresh Organic Products (Keerthi Dhat)
+
+-- Reference schema for PostgreSQL (Hibernate auto-creates this via ddl-auto=update).
+-- CREATE TABLE shipping_addresses (
+--     id           BIGSERIAL PRIMARY KEY,
+--     user_id      INTEGER REFERENCES "User"(userid),
+--     order_id     BIGINT REFERENCES "Orders"(id),
+--     full_name    VARCHAR(255),
+--     phone        VARCHAR(20),
+--     line1        VARCHAR(255),
+--     line2        VARCHAR(255),
+--     landmark     VARCHAR(255),
+--     city         VARCHAR(120),
+--     state        VARCHAR(120),
+--     pincode      VARCHAR(12),
+--     country      VARCHAR(80),
+--     instructions TEXT,
+--     address_type VARCHAR(20),
+--     created_at   TIMESTAMP
+-- );
