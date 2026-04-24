@@ -20,7 +20,7 @@ import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.ShippingAddress;
 import com.example.groceryapi.model.Supply;
 import com.example.groceryapi.model.UserRole;
-import com.example.groceryapi.model.Users;
+import com.example.groceryapi.model.User;
 
 import java.time.LocalDate;
 
@@ -31,9 +31,9 @@ import jakarta.persistence.PersistenceContext;
 @Transactional
 public class Repository {
 
-    private static final String SELECT_ALL_USERS = "SELECT u FROM Users u";
-    private static final String SELECT_USER_BY_EMAIL = "SELECT u FROM Users u WHERE u.email = :email";
-    private static final String DELETE_ALL_USERS = "DELETE FROM Users";
+    private static final String SELECT_ALL_USERS = "SELECT u FROM User u";
+    private static final String SELECT_USER_BY_EMAIL = "SELECT u FROM User u WHERE u.email = :email";
+    private static final String DELETE_ALL_USERS = "DELETE FROM User";
 
     private static final String SELECT_ALL_ROLES = "SELECT r FROM Role r";
     private static final String SELECT_ROLE_BY_NAME = "SELECT r FROM Role r WHERE LOWER(r.role) = LOWER(:name)";
@@ -97,22 +97,22 @@ public class Repository {
     @PersistenceContext
     private EntityManager em;
 
-    public List<Users> findAllUsers() {
-        return em.createQuery(SELECT_ALL_USERS, Users.class).getResultList();
+    public List<User> findAllUsers() {
+        return em.createQuery(SELECT_ALL_USERS, User.class).getResultList();
     }
 
-    public Optional<Users> findUserById(int id) {
-        return Optional.ofNullable(em.find(Users.class, id));
+    public Optional<User> findUserById(int id) {
+        return Optional.ofNullable(em.find(User.class, id));
     }
 
-    public Optional<Users> findUserByEmail(String email) {
-        return em.createQuery(SELECT_USER_BY_EMAIL, Users.class)
+    public Optional<User> findUserByEmail(String email) {
+        return em.createQuery(SELECT_USER_BY_EMAIL, User.class)
                 .setParameter("email", email)
                 .getResultStream()
                 .findFirst();
     }
 
-    public Users saveUser(Users user) {
+    public User saveUser(User user) {
         if (user.getuserid() == 0) {
             em.persist(user);
             return user;
@@ -121,7 +121,7 @@ public class Repository {
     }
 
     public void deleteUserById(int id) {
-        Users user = em.find(Users.class, id);
+        User user = em.find(User.class, id);
         if (user != null) {
             em.remove(user);
         }

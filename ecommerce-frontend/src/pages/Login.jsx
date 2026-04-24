@@ -31,6 +31,7 @@ import {
   clearAuthError,
   selectCurrentUser,
   hasRole,
+  dashboardPathFor,
 } from '../store/slices/authSlice.js';
 import { setActiveUserId } from '../store/slices/sessionSlice.js';
 
@@ -113,7 +114,7 @@ export default function Login() {
         dispatch(setActiveUserId(null));
         return;
       }
-      navigate('/');
+      navigate(dashboardPathFor(currentUser));
     }
   }, [currentUser, status, expectedType, navigate, dispatch]);
 

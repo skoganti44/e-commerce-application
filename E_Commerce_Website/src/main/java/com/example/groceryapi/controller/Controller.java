@@ -20,23 +20,23 @@ import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.ShippingAddress;
 import com.example.groceryapi.model.UserRole;
-import com.example.groceryapi.model.Users;
-import com.example.groceryapi.service.userService;
+import com.example.groceryapi.model.User;
+import com.example.groceryapi.service.UserService;
 
 @RestController
 public class Controller {
     @Autowired
-    private userService userService;
+    private UserService userService;
 
     @GetMapping(value = "/users", headers = "Accept=application/json")
-    public List<Users> fetchUsers() {
+    public List<User> fetchUsers() {
         return userService.fetchUsers();
     }
 
     @PostMapping(value = "/register", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> register(@RequestBody Map<String, String> body) {
         try {
-            Users saved = userService.register(
+            User saved = userService.register(
                     body.get("name"),
                     body.get("email"),
                     body.get("password"),
@@ -53,14 +53,14 @@ public class Controller {
     @PostMapping(value = "/login", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> login(@RequestBody Map<String, String> body) {
         try {
-            Users user = userService.login(body.get("email"), body.get("password"));
+            User user = userService.login(body.get("email"), body.get("password"));
             return ResponseEntity.ok(toPublicUser(user));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(401).body(Map.of("error", e.getMessage()));
         }
     }
 
-    private Map<String, Object> toPublicUser(Users u) {
+    private Map<String, Object> toPublicUser(User u) {
         Map<String, Object> out = new java.util.HashMap<>();
         out.put("userid", u.getuserid());
         out.put("name", u.getname());

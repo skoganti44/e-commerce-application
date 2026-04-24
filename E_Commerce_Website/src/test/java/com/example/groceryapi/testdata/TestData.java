@@ -14,7 +14,7 @@ import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.ProductAvailable;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.UserRole;
-import com.example.groceryapi.model.Users;
+import com.example.groceryapi.model.User;
 
 public final class TestData {
 
@@ -29,28 +29,28 @@ public final class TestData {
     public static final String IT = "IT";
     public static final String SALES = "Sales";
 
-    public static Users john() {
+    public static User john() {
         return user(1, "John", "john@example.com", "pass123", JOHN_CREATED_AT);
     }
 
-    public static Users jane() {
+    public static User jane() {
         return user(2, "Jane", "jane@example.com", "pass456", JANE_CREATED_AT);
     }
 
-    public static Users johnMarch() {
+    public static User johnMarch() {
         return user(1, "John", "john@example.com", "pass123", MARCH_CREATED_AT);
     }
 
-    public static Users newJohn() {
+    public static User newJohn() {
         return user(0, "John", "john@example.com", "pass123", LocalDateTime.now());
     }
 
-    public static Users newJane() {
+    public static User newJane() {
         return user(0, "Jane", "jane@example.com", "pass456", LocalDateTime.now());
     }
 
-    public static Users user(int id, String name, String email, String password, LocalDateTime createdAt) {
-        Users u = new Users();
+    public static User user(int id, String name, String email, String password, LocalDateTime createdAt) {
+        User u = new User();
         u.setuserid(id);
         u.setname(name);
         u.setemail(email);
@@ -88,7 +88,7 @@ public final class TestData {
         return r;
     }
 
-    public static List<Users> users() {
+    public static List<User> users() {
         return List.of(john(), jane());
     }
 
@@ -96,7 +96,7 @@ public final class TestData {
         return List.of(joeJonnas(), steveWooten());
     }
 
-    public static UserRole userRole(int id, Users user, Role role) {
+    public static UserRole userRole(int id, User user, Role role) {
         UserRole ur = new UserRole();
         ur.setUserroleid(id);
         ur.setUser(user);
@@ -146,7 +146,7 @@ public final class TestData {
         return product(5L, "Bread", new BigDecimal("1.00"), 100);
     }
 
-    public static Cart cart(Long id, Users user, LocalDateTime createdAt) {
+    public static Cart cart(Long id, User user, LocalDateTime createdAt) {
         Cart c = new Cart();
         c.setId(id);
         c.setUser(user);
@@ -158,7 +158,7 @@ public final class TestData {
         return cart(1L, john(), JOHN_CREATED_AT);
     }
 
-    public static Cart newCart(Users user) {
+    public static Cart newCart(User user) {
         Cart c = new Cart();
         c.setUser(user);
         return c;
@@ -197,7 +197,7 @@ public final class TestData {
         return role(11, "Manager One", "Manager", SALES);
     }
 
-    public static Orders order(Long id, Users user, BigDecimal totalAmount, String status) {
+    public static Orders order(Long id, User user, BigDecimal totalAmount, String status) {
         Orders o = new Orders();
         o.setId(id);
         o.setUser(user);
@@ -206,7 +206,7 @@ public final class TestData {
         return o;
     }
 
-    public static Orders newOrder(Users user, BigDecimal totalAmount, String status) {
+    public static Orders newOrder(User user, BigDecimal totalAmount, String status) {
         Orders o = new Orders();
         o.setUser(user);
         o.setTotalAmount(totalAmount);
@@ -264,7 +264,7 @@ public final class TestData {
         return p;
     }
 
-    public static ProductAvailable newProductAvailable(Product p, Users creator, String imageUrl) {
+    public static ProductAvailable newProductAvailable(Product p, User creator, String imageUrl) {
         ProductAvailable pa = new ProductAvailable();
         pa.setName(p.getName());
         pa.setDescription(p.getDescription());

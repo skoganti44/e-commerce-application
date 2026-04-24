@@ -58,3 +58,63 @@ export const fetchShippingAddress = (userid) =>
 
 export const checkout = (payload) =>
   client.post('/checkout', payload).then((r) => r.data);
+
+export const fetchKitchenOnlineOrders = () =>
+  client.get('/kitchen/online-orders').then((r) => r.data);
+
+export const fetchKitchenInStoreOrders = () =>
+  client.get('/kitchen/instore-orders').then((r) => r.data);
+
+export const fetchDailyStock = () =>
+  client.get('/kitchen/daily-stock').then((r) => r.data);
+
+export const updateKitchenOrderStatus = (orderId, kitchenStatus, reason) =>
+  client
+    .post(`/kitchen/order/${orderId}/status`, { kitchenStatus, reason })
+    .then((r) => r.data);
+
+export const fetchDeliveryOnlineOrders = () =>
+  client.get('/delivery/online-orders').then((r) => r.data);
+
+export const fetchBakeryInStoreOrders = () =>
+  client.get('/bakery/instore-orders').then((r) => r.data);
+
+export const adjustDailyStockPrepared = (stockId, delta) =>
+  client
+    .post(`/kitchen/daily-stock/${stockId}/adjust`, { delta })
+    .then((r) => r.data);
+
+export const fetchSupplies = () =>
+  client.get('/kitchen/supplies').then((r) => r.data);
+
+export const saveSupply = (payload) =>
+  client.post('/kitchen/supplies', payload).then((r) => r.data);
+
+export const adjustSupplyStock = (supplyId, delta, note) =>
+  client
+    .post(`/kitchen/supplies/${supplyId}/adjust`, { delta, note })
+    .then((r) => r.data);
+
+export const seedSupplies = () =>
+  client.post('/kitchen/supplies/seed').then((r) => r.data);
+
+export const bulkUpdateSupplyStatuses = (updates) =>
+  client
+    .post('/kitchen/supplies/bulk-status', { updates })
+    .then((r) => r.data);
+
+export const fetchSupplyRequests = () =>
+  client.get('/management/supply-requests').then((r) => r.data);
+
+export const fulfillSupply = (supplyId, receivedQty, note) =>
+  client
+    .post(`/management/supplies/${supplyId}/fulfill`, { receivedQty, note })
+    .then((r) => r.data);
+
+export const fetchInStockSupplies = () =>
+  client.get('/kitchen/in-stock').then((r) => r.data);
+
+export const requestMoreSupply = (supplyId, requestedQty, urgency) =>
+  client
+    .post(`/kitchen/supplies/${supplyId}/request`, { requestedQty, urgency })
+    .then((r) => r.data);

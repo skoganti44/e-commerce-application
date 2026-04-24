@@ -32,11 +32,11 @@ import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.ShippingAddress;
 import com.example.groceryapi.model.Supply;
 import com.example.groceryapi.model.UserRole;
-import com.example.groceryapi.model.Users;
+import com.example.groceryapi.model.User;
 import com.example.groceryapi.repository.Repository;
 
 @Service
-public class userService {
+public class UserService {
 
     private static final Set<String> ALLOWED_SWEETENERS = Set.of(
             "CANE_SUGAR", "BROWN_SUGAR", "MAPLE_SYRUP", "JAGGERY", "HONEY");
@@ -73,18 +73,18 @@ public class userService {
 
     private final Repository repository;
 
-    public userService(Repository repository) {
+    public UserService(Repository repository) {
         this.repository = repository;
     }
 
-    public List<Users> fetchUsers() {
+    public List<User> fetchUsers() {
         return repository.findAllUsers();
     }
 
     private static final Set<String> ALLOWED_DEPARTMENTS = Set.of(
             "bakery", "sales", "kitchen", "delivery", "management");
 
-    public Users register(String name, String email, String password,
+    public User register(String name, String email, String password,
                           String userType, String department) {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("name is required");
@@ -113,7 +113,7 @@ public class userService {
         if (repository.findUserByEmail(email).isPresent()) {
             throw new IllegalStateException("email already registered: " + email);
         }
-        Users user = new Users();
+        User user = new User();
         user.setname(name);
         user.setemail(email);
         user.setpassword(password);
@@ -153,11 +153,11 @@ public class userService {
         return Character.toUpperCase(s.charAt(0)) + s.substring(1);
     }
 
-    public Users login(String email, String password) {
+    public User login(String email, String password) {
         if (email == null || password == null) {
             throw new IllegalArgumentException("email and password are required");
         }
-        Users user = repository.findUserByEmail(email)
+        User user = repository.findUserByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("invalid email or password"));
         if (!password.equals(user.getpassword())) {
             throw new IllegalArgumentException("invalid email or password");
@@ -171,7 +171,7 @@ public class userService {
         if (quantity <= 0) {
             throw new IllegalArgumentException("quantity must be positive");
         }
-        Users user = repository.findUserById(userid)
+        User user = repository.findUserById(userid)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + userid));
         Product product = repository.findProductById(productId)
                 .orElseThrow(() -> new IllegalArgumentException("Product not found: " + productId));
@@ -254,7 +254,7 @@ public class userService {
         CartItem item = repository.findCartItemById(cartItemId)
                 .orElseThrow(() -> new IllegalArgumentException("Cart item not found: " + cartItemId));
         Cart itemCart = item.getCart();
-        Users owner = itemCart == null ? null : itemCart.getUser();
+        User owner = itemCart == null ? null : itemCart.getUser();
         if (owner == null || owner.getuserid() != userid) {
             throw new IllegalArgumentException("Cart item does not belong to user " + userid);
         }
@@ -420,7 +420,7 @@ public class userService {
     }
 
     public List<Product> saveProduct(Map<String, Object> request) {
-        Users creator = resolveUser((Integer) request.get("userId"));
+        User creator = resolveUser((Integer) request.get("userId"));
         requireEmployee(creator);
         String name = (String) request.get("name");
         String description = (String) request.get("description");
@@ -429,7 +429,7 @@ public class userService {
     }
 
     public List<Product> saveProducts(Map<String, Object> request) {
-        Users creator = resolveUser((Integer) request.get("userId"));
+        User creator = resolveUser((Integer) request.get("userId"));
         requireEmployee(creator);
         List<Map<String, Object>> products = (List<Map<String, Object>>) request.get("products");
         List<Product> saved = new ArrayList<>();
@@ -442,7 +442,7 @@ public class userService {
         return saved;
     }
 
-    private Users resolveUser(Integer userId) {
+    private User resolveUser(Integer userId) {
         if (userId == null) {
             throw new IllegalArgumentException("userId is required");
         }
@@ -450,7 +450,7 @@ public class userService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
     }
 
-    private void requireEmployee(Users user) {
+    private void requireEmployee(User user) {
         List<String> roles = repository.findRolesByUserId(user.getuserid()).stream()
                 .map(Role::getRole)
                 .filter(r -> r != null && !r.isBlank())
@@ -466,7 +466,7 @@ public class userService {
             "DEBIT_CARD", "CREDIT_CARD", "GIFT_CARD", "COD");
 
     public ShippingAddress saveShippingAddress(int userid, Map<String, Object> body) {
-        Users user = repository.findUserById(userid)
+        User user = repository.findUserById(userid)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + userid));
         ShippingAddress address = buildAddress(body);
         validateAddress(address);
@@ -490,7 +490,7 @@ public class userService {
                                         Map<String, Object> addressBody,
                                         String cardLast4,
                                         String customerNotes) {
-        Users user = repository.findUserById(userid)
+        User user = repository.findUserById(userid)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + userid));
 
         String paymentMethod = normalizeCode(paymentMethodRaw);
@@ -658,7 +658,7 @@ public class userService {
     }
 
     private List<Product> saveItems(String name, String description,
-                                    List<Map<String, Object>> items, Users creator) {
+                                    List<Map<String, Object>> items, User creator) {
         List<Product> saved = new ArrayList<>();
         for (Map<String, Object> item : items) {
             Map<String, Object> cat = (Map<String, Object>) item.get("category");
@@ -710,7 +710,7 @@ public class userService {
             values = Arrays.asList(raw.toString().split(","));
         }
         List<String> cleaned = values.stream()
-                .map(userService::normalizeCode)
+                .map(UserService::normalizeCode)
                 .filter(v -> v != null && !v.isBlank())
                 .distinct()
                 .collect(Collectors.toList());

@@ -18,7 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
-import com.example.groceryapi.model.Users;
+import com.example.groceryapi.model.User;
 import com.example.groceryapi.repository.Repository;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -40,14 +40,14 @@ public class UserAcceptanceTest {
     @DisplayName("GIVEN users exist WHEN I fetch all users THEN I get a list of users with status 200")
     public void shouldReturnAllUsers() {
         // GIVEN
-        Users user1 = new Users();
+        User user1 = new User();
         user1.setname("John");
         user1.setemail("john@example.com");
         user1.setpassword("pass123");
         user1.setcreatedat(LocalDateTime.now());
         repository.saveUser(user1);
 
-        Users user2 = new Users();
+        User user2 = new User();
         user2.setname("Jane");
         user2.setemail("jane@example.com");
         user2.setpassword("pass456");
@@ -87,7 +87,7 @@ public class UserAcceptanceTest {
     @DisplayName("GIVEN users exist WHEN I fetch users THEN each user has all required fields")
     public void shouldReturnUsersWithAllFields() {
         // GIVEN
-        Users user = new Users();
+        User user = new User();
         user.setname("John");
         user.setemail("john@example.com");
         user.setpassword("pass123");

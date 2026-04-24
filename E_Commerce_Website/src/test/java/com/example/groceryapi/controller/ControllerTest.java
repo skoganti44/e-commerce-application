@@ -19,7 +19,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.example.groceryapi.service.userService;
+import com.example.groceryapi.service.UserService;
 import com.example.groceryapi.testdata.TestData;
 
 @WebMvcTest(Controller.class)
@@ -29,7 +29,7 @@ public class ControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private userService userService;
+    private UserService userService;
 
     @Test
     public void testFetchUsers_ReturnsUserList() throws Exception {

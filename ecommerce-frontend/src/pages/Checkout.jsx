@@ -237,6 +237,7 @@ export default function Checkout() {
     cvv: '',
   });
   const [gift, setGift] = useState({ code: '', pin: '' });
+  const [customerNotes, setCustomerNotes] = useState('');
 
   const [errors, setErrors] = useState({});
   const [snack, setSnack] = useState({ open: false, message: '', severity: 'success' });
@@ -358,6 +359,7 @@ export default function Checkout() {
         paymentMethod: method,
         address,
         cardLast4,
+        customerNotes: customerNotes.trim() || null,
       });
       try {
         sessionStorage.setItem('dhati.lastCheckout', JSON.stringify(result));
@@ -834,6 +836,17 @@ export default function Checkout() {
             </Typography>
             <OrderSummaryLines />
             <Divider sx={{ my: 2 }} />
+            <TextField
+              fullWidth
+              multiline
+              minRows={2}
+              label="Notes for the kitchen (optional)"
+              placeholder="Allergies, birthday message, special requests…"
+              value={customerNotes}
+              onChange={(e) => setCustomerNotes(e.target.value.slice(0, 280))}
+              helperText={`${customerNotes.length}/280`}
+              sx={{ mb: 2 }}
+            />
             <Stack direction="row" justifyContent="space-between" sx={{ mb: 2 }}>
               <Typography variant="h6" sx={{ fontWeight: 800, ...RAINBOW_TEXT }}>
                 Total

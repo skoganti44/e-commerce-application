@@ -99,4 +99,28 @@ export const hasRole = (user, role) => {
   return isEmployee(user);
 };
 
+const ALLOWED_DEPARTMENTS = [
+  'kitchen',
+  'bakery',
+  'sales',
+  'delivery',
+  'management',
+];
+
+export const normalizeDepartments = (user) =>
+  (user?.departments || [])
+    .map((d) => (d == null ? '' : String(d).trim().toLowerCase()))
+    .filter((d) => ALLOWED_DEPARTMENTS.includes(d));
+
+export const getPrimaryDepartment = (user) => {
+  const depts = normalizeDepartments(user);
+  return depts.length > 0 ? depts[0] : null;
+};
+
+export const dashboardPathFor = (user) => {
+  if (!isEmployee(user)) return '/';
+  const dept = getPrimaryDepartment(user);
+  return dept ? `/dashboard/${dept}` : '/';
+};
+
 export default authSlice.reducer;

@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 import com.example.groceryapi.model.Category;
 import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.ProductImage;
-import com.example.groceryapi.model.Users;
+import com.example.groceryapi.model.User;
 import com.example.groceryapi.repository.Repository;
 
 /**
@@ -32,8 +32,8 @@ public class DataSeeder implements CommandLineRunner {
             return;
         }
 
-        Users creator = repository.findAllUsers().stream().findFirst().orElseGet(() -> {
-            Users u = new Users();
+        User creator = repository.findAllUsers().stream().findFirst().orElseGet(() -> {
+            User u = new User();
             u.setname("Dhati Admin");
             u.setemail("admin@dhati.local");
             u.setpassword("Admin@123");

@@ -37,7 +37,7 @@ public class Product {
 
     @ManyToOne
     @JoinColumn(name = "created_by_userid")
-    private Users createdBy;
+    private User createdBy;
 
     @Column(name = "supported_flours")
     private String supportedFlours;
@@ -101,11 +101,11 @@ public class Product {
         this.createdAt = createdAt;
     }
 
-    public Users getCreatedBy() {
+    public User getCreatedBy() {
         return createdBy;
     }
 
-    public void setCreatedBy(Users createdBy) {
+    public void setCreatedBy(User createdBy) {
         this.createdBy = createdBy;
     }
 

@@ -22,7 +22,7 @@ public class ShippingAddress {
 
     @ManyToOne
     @JoinColumn(name = "user_id")
-    private Users user;
+    private User user;
 
     @ManyToOne
     @JoinColumn(name = "order_id")
@@ -68,8 +68,8 @@ public class ShippingAddress {
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
-    public Users getUser() { return user; }
-    public void setUser(Users user) { this.user = user; }
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
 
     public Orders getOrder() { return order; }
     public void setOrder(Orders order) { this.order = order; }

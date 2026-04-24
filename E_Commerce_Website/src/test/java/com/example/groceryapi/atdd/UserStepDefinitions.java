@@ -13,7 +13,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
-import com.example.groceryapi.model.Users;
+import com.example.groceryapi.model.User;
 import com.example.groceryapi.repository.Repository;
 
 import io.cucumber.datatable.DataTable;
@@ -48,7 +48,7 @@ public class UserStepDefinitions {
     public void theFollowingUsersExist(DataTable dataTable) {
         List<Map<String, String>> rows = dataTable.asMaps();
         for (Map<String, String> row : rows) {
-            Users user = new Users();
+            User user = new User();
             user.setname(row.get("name"));
             user.setemail(row.get("email"));
             user.setpassword(row.get("password"));

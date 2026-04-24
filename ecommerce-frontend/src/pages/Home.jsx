@@ -22,7 +22,12 @@ import StorefrontIcon from '@mui/icons-material/Storefront';
 import GrassIcon from '@mui/icons-material/Grass';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import { selectCurrentUser } from '../store/slices/authSlice.js';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import {
+  selectCurrentUser,
+  isEmployee,
+  dashboardPathFor,
+} from '../store/slices/authSlice.js';
 
 const RAINBOW_TEXT = {
   background:
@@ -80,6 +85,7 @@ export default function Home() {
 
   if (currentUser) {
     const displayName = currentUser.name || '';
+    const employee = isEmployee(currentUser);
     return (
       <Stack spacing={3}>
         <Box
@@ -164,13 +170,23 @@ export default function Home() {
             Take a look and let the cravings decide.
           </Typography>
 
-          <Button
-            onClick={() => navigate('/products')}
-            startIcon={<StorefrontIcon sx={{ color: '#fff' }} />}
-            sx={{ ...RAINBOW_FILLED_BTN, mt: 4, px: 4, py: 1.3 }}
-          >
-            Start Shopping
-          </Button>
+          {employee ? (
+            <Button
+              onClick={() => navigate(dashboardPathFor(currentUser))}
+              startIcon={<DashboardIcon sx={{ color: '#fff' }} />}
+              sx={{ ...RAINBOW_FILLED_BTN, mt: 4, px: 4, py: 1.3 }}
+            >
+              Go to Dashboard
+            </Button>
+          ) : (
+            <Button
+              onClick={() => navigate('/products')}
+              startIcon={<StorefrontIcon sx={{ color: '#fff' }} />}
+              sx={{ ...RAINBOW_FILLED_BTN, mt: 4, px: 4, py: 1.3 }}
+            >
+              Start Shopping
+            </Button>
+          )}
         </Paper>
 
         <Box

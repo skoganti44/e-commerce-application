@@ -21,7 +21,7 @@ public class Cart {
 
     @ManyToOne
     @JoinColumn(name = "user_id")
-    private Users user;
+    private User user;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -34,11 +34,11 @@ public class Cart {
         this.id = id;
     }
 
-    public Users getUser() {
+    public User getUser() {
         return user;
     }
 
-    public void setUser(Users user) {
+    public void setUser(User user) {
         this.user = user;
     }
 

@@ -11,7 +11,7 @@ import jakarta.persistence.Table;
 
 @Entity // Marks this class as a database table
 @Table(name = "\"User\"", schema = "public")
-public class Users {
+public class User {
 
     @Id // Marks the primary key field
         // @GeneratedValue==>Auto-generates primary key values

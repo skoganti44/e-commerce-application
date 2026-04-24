@@ -37,7 +37,7 @@ public class ProductAvailable {
 
     @ManyToOne
     @JoinColumn(name = "created_by_userid")
-    private Users createdBy;
+    private User createdBy;
 
     @Column(name = "image_url")
     private String imageUrl;
@@ -63,8 +63,8 @@ public class ProductAvailable {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
-    public Users getCreatedBy() { return createdBy; }
-    public void setCreatedBy(Users createdBy) { this.createdBy = createdBy; }
+    public User getCreatedBy() { return createdBy; }
+    public void setCreatedBy(User createdBy) { this.createdBy = createdBy; }
 
     public String getImageUrl() { return imageUrl; }
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }

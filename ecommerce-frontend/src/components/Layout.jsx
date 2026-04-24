@@ -13,30 +13,44 @@ import {
 } from '@mui/material';
 import BakeryDiningIcon from '@mui/icons-material/BakeryDining';
 import LogoutIcon from '@mui/icons-material/Logout';
-import { logout, selectCurrentUser, hasRole } from '../store/slices/authSlice.js';
+import {
+  logout,
+  selectCurrentUser,
+  hasRole,
+  getPrimaryDepartment,
+  isEmployee,
+} from '../store/slices/authSlice.js';
 import { setActiveUserId } from '../store/slices/sessionSlice.js';
 
-const navLinks = [
-  { to: '/', label: 'Home' },
-  { to: '/products', label: 'Products', requiresAuth: true },
-  { to: '/payments', label: 'Orders', requiresAuth: true },
-  {
-    to: '/manage-products',
-    label: 'Add items',
-    requiresAuth: true,
-    requiresRole: 'employee',
-    hint: 'Only employees can add items to sell',
-  },
-  {
-    to: '/add-products',
-    label: 'Add Products',
-    requiresAuth: true,
-    requiresRole: 'employee',
-    hint: 'Quick-add a product with name, price, description and image',
-  },
-];
+const buildNavLinks = (user) => {
+  if (isEmployee(user)) {
+    const dept = getPrimaryDepartment(user);
+    const links = [{ to: '/', label: 'Home' }];
+    if (dept) {
+      links.push({
+        to: `/dashboard/${dept}`,
+        label: 'Dashboard',
+        hint: `Open your ${dept} dashboard`,
+      });
+    }
+    return links;
+  }
+  return [
+    { to: '/', label: 'Home' },
+    { to: '/products', label: 'Products', requiresAuth: true },
+    { to: '/payments', label: 'Orders', requiresAuth: true },
+  ];
+};
 
 const AFTER_LOGIN_BG = '/afterlogin-bake.png';
+
+const DEPARTMENT_BG = {
+  kitchen: '/kitchen-image.png',
+  bakery: '/bakery-image.png',
+  sales: '/sales-image.png',
+  delivery: '/delivery-image.png',
+  management: '/management-image.png',
+};
 
 export default function Layout() {
   const dispatch = useDispatch();
@@ -48,6 +62,9 @@ export default function Layout() {
   };
 
   const loggedIn = Boolean(currentUser);
+  const dept = getPrimaryDepartment(currentUser);
+  const backgroundUrl =
+    (isEmployee(currentUser) && dept && DEPARTMENT_BG[dept]) || AFTER_LOGIN_BG;
 
   return (
     <Box
@@ -61,7 +78,7 @@ export default function Layout() {
                 rgba(255,255,255,0.82) 0%,
                 rgba(255,255,255,0.72) 100%
               ),
-              url('${AFTER_LOGIN_BG}')`
+              url('${backgroundUrl}')`
           : undefined,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
@@ -100,7 +117,7 @@ export default function Layout() {
             Dhati Bake
           </Typography>
           <Box sx={{ flexGrow: 1, display: 'flex', gap: 1 }}>
-            {navLinks
+            {buildNavLinks(currentUser)
               .filter((link) => {
                 if (link.requiresAuth && !currentUser) return false;
                 if (link.requiresRole && !hasRole(currentUser, link.requiresRole))
