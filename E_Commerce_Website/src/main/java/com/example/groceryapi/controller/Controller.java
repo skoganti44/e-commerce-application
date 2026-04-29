@@ -421,6 +421,411 @@ public class Controller {
         }
     }
 
+    @PostMapping(value = "/counter/sale", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> recordCounterSale(@RequestBody Map<String, Object> body) {
+        try {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> items = (List<Map<String, Object>>) body.get("items");
+            String paymentMethod = (String) body.get("paymentMethod");
+            Object cashRaw = body.get("cashGiven");
+            java.math.BigDecimal cashGiven = null;
+            if (cashRaw instanceof Number) {
+                cashGiven = java.math.BigDecimal.valueOf(((Number) cashRaw).doubleValue());
+            } else if (cashRaw instanceof String && !((String) cashRaw).isBlank()) {
+                cashGiven = new java.math.BigDecimal((String) cashRaw);
+            }
+            String customerName = (String) body.get("customerName");
+            String customerNotes = (String) body.get("customerNotes");
+            Map<String, Object> result = userService.recordCounterSale(
+                    items, paymentMethod, cashGiven, customerName, customerNotes);
+            return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid request" : e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/sales/analytics", produces = "application/json")
+    public ResponseEntity<?> salesAnalytics(
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
+        try {
+            return ResponseEntity.ok(userService.salesAnalytics(from, to));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/tasks", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> createTask(@RequestBody Map<String, Object> body) {
+        try {
+            int createdById = ((Number) body.get("createdByUserId")).intValue();
+            Integer assignedUserId = body.get("assignedToUserId") == null
+                    ? null : ((Number) body.get("assignedToUserId")).intValue();
+            Long relatedOrderId = body.get("relatedOrderId") == null
+                    ? null : ((Number) body.get("relatedOrderId")).longValue();
+            Map<String, Object> created = userService.createTask(
+                    createdById,
+                    (String) body.get("assignedToDepartment"),
+                    assignedUserId,
+                    (String) body.get("title"),
+                    (String) body.get("description"),
+                    (String) body.get("priority"),
+                    (String) body.get("dueDate"),
+                    relatedOrderId);
+            return ResponseEntity.ok(created);
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid task payload" : e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/tasks", produces = "application/json")
+    public ResponseEntity<?> listTasks(
+            @RequestParam(required = false) String department,
+            @RequestParam(required = false) Integer createdByUserId,
+            @RequestParam(required = false) String status) {
+        try {
+            return ResponseEntity.ok(userService.listTasks(department, createdByUserId, status));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/tasks/{taskId}/status", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> updateTaskStatus(@PathVariable long taskId, @RequestBody Map<String, Object> body) {
+        try {
+            Integer actingUserId = body.get("actingUserId") == null
+                    ? null : ((Number) body.get("actingUserId")).intValue();
+            Map<String, Object> updated = userService.updateTaskStatus(
+                    taskId,
+                    (String) body.get("status"),
+                    actingUserId,
+                    (String) body.get("resolutionNotes"));
+            return ResponseEntity.ok(updated);
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid status payload" : e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/delivery/trips", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> pickUpTrip(@RequestBody Map<String, Object> body) {
+        try {
+            long orderId = ((Number) body.get("orderId")).longValue();
+            int driverId = ((Number) body.get("driverId")).intValue();
+            return ResponseEntity.ok(userService.pickUpTrip(orderId, driverId));
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid pickup payload" : e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/delivery/trips/{tripId}/out", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> markOutForDelivery(@PathVariable long tripId, @RequestBody Map<String, Object> body) {
+        try {
+            int driverId = ((Number) body.get("driverId")).intValue();
+            return ResponseEntity.ok(userService.markOutForDelivery(tripId, driverId));
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid request" : e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/delivery/trips/{tripId}/deliver", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> markDelivered(@PathVariable long tripId, @RequestBody Map<String, Object> body) {
+        try {
+            int driverId = ((Number) body.get("driverId")).intValue();
+            String otp = (String) body.get("otp");
+            String photoUrl = (String) body.get("photoUrl");
+            String notes = (String) body.get("notes");
+            BigDecimal cod = toBigDecimal(body.get("codAmount"));
+            BigDecimal tip = toBigDecimal(body.get("tipAmount"));
+            BigDecimal dist = toBigDecimal(body.get("distanceKm"));
+            return ResponseEntity.ok(
+                    userService.markDelivered(tripId, driverId, otp, photoUrl, cod, tip, dist, notes));
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid delivery payload" : e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/delivery/trips/{tripId}/fail", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> markTripFailed(@PathVariable long tripId, @RequestBody Map<String, Object> body) {
+        try {
+            int driverId = ((Number) body.get("driverId")).intValue();
+            String reason = (String) body.get("reason");
+            String notes = (String) body.get("notes");
+            return ResponseEntity.ok(userService.markTripFailed(tripId, driverId, reason, notes));
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid request" : e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/delivery/trips", produces = "application/json")
+    public ResponseEntity<?> listTrips(
+            @RequestParam int driverId,
+            @RequestParam(required = false) String status) {
+        try {
+            return ResponseEntity.ok(userService.listTripsForDriver(driverId, status));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/delivery/issues", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> logIssue(@RequestBody Map<String, Object> body) {
+        try {
+            int driverId = ((Number) body.get("driverId")).intValue();
+            String issueType = (String) body.get("issueType");
+            String description = (String) body.get("description");
+            Long tripId = body.get("tripId") == null ? null : ((Number) body.get("tripId")).longValue();
+            return ResponseEntity.ok(userService.logDeliveryIssue(driverId, issueType, description, tripId));
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid issue payload" : e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/delivery/issues", produces = "application/json")
+    public ResponseEntity<?> listIssues(@RequestParam int driverId) {
+        try {
+            return ResponseEntity.ok(userService.listIssuesForDriver(driverId));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/delivery/summary", produces = "application/json")
+    public ResponseEntity<?> shiftSummary(
+            @RequestParam int driverId,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
+        try {
+            return ResponseEntity.ok(userService.shiftSummary(driverId, from, to));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/management/ops", produces = "application/json")
+    public ResponseEntity<?> managementOps() {
+        try {
+            return ResponseEntity.ok(userService.managementOps());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/management/orders-audit", produces = "application/json")
+    public ResponseEntity<?> managementOrdersAudit(
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
+            @RequestParam(required = false) String channel,
+            @RequestParam(required = false) String paymentMethod) {
+        try {
+            return ResponseEntity.ok(
+                    userService.managementOrdersAudit(from, to, channel, paymentMethod));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/management/deliveries-audit", produces = "application/json")
+    public ResponseEntity<?> managementDeliveriesAudit(
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
+            @RequestParam(required = false) Integer driverId,
+            @RequestParam(required = false) String status) {
+        try {
+            return ResponseEntity.ok(
+                    userService.managementDeliveriesAudit(from, to, driverId, status));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/management/day-pnl", produces = "application/json")
+    public ResponseEntity<?> managementDayPnl(@RequestParam(required = false) String date) {
+        try {
+            return ResponseEntity.ok(userService.managementDayPnl(date));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/supplies/{supplyId}/request",
+                 consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> requestSupplyByTeam(@PathVariable long supplyId,
+                                                  @RequestBody Map<String, Object> body) {
+        try {
+            BigDecimal qty = toBigDecimal(body.get("requestedQty"));
+            String urgency = (String) body.get("urgency");
+            String team = (String) body.get("team");
+            return ResponseEntity.ok(
+                    userService.requestMoreSupplyByTeam(supplyId, qty, urgency, team));
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid request" : e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/discount-campaigns",
+                 consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> proposeDiscountCampaign(@RequestBody Map<String, Object> body) {
+        try {
+            int proposedById = ((Number) body.get("proposedByUserId")).intValue();
+            BigDecimal discountPercent = toBigDecimal(body.get("discountPercent"));
+            return ResponseEntity.ok(userService.proposeDiscountCampaign(
+                    proposedById,
+                    (String) body.get("name"),
+                    (String) body.get("categoryFilter"),
+                    discountPercent,
+                    (String) body.get("startsOn"),
+                    (String) body.get("endsOn")));
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid campaign payload" : e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/discount-campaigns", produces = "application/json")
+    public ResponseEntity<?> listDiscountCampaigns(
+            @RequestParam(required = false) String status) {
+        try {
+            return ResponseEntity.ok(userService.listDiscountCampaigns(status));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/discount-campaigns/{id}/decision",
+                 consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> decideDiscountCampaign(@PathVariable long id,
+                                                     @RequestBody Map<String, Object> body) {
+        try {
+            int managerId = ((Number) body.get("managerUserId")).intValue();
+            String decision = (String) body.get("decision");
+            String notes = (String) body.get("notes");
+            return ResponseEntity.ok(
+                    userService.decideDiscountCampaign(id, managerId, decision, notes));
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid decision payload" : e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/orders/{orderId}/flag-approval",
+                 consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> flagOrderForApproval(@PathVariable long orderId,
+                                                   @RequestBody Map<String, Object> body) {
+        try {
+            String notes = body == null ? null : (String) body.get("notes");
+            return ResponseEntity.ok(userService.flagOrderForApproval(orderId, notes));
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid request" : e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/orders/pending-approval", produces = "application/json")
+    public ResponseEntity<?> listOrdersPendingApproval() {
+        try {
+            return ResponseEntity.ok(userService.listOrdersPendingApproval());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/orders/{orderId}/approval-decision",
+                 consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> decideOrderApproval(@PathVariable long orderId,
+                                                  @RequestBody Map<String, Object> body) {
+        try {
+            int managerId = ((Number) body.get("managerUserId")).intValue();
+            String decision = (String) body.get("decision");
+            String notes = (String) body.get("notes");
+            return ResponseEntity.ok(
+                    userService.decideOrderApproval(orderId, managerId, decision, notes));
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid request" : e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/refund-requests", consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> raiseRefundRequest(@RequestBody Map<String, Object> body) {
+        try {
+            long orderId = ((Number) body.get("orderId")).longValue();
+            int raisedById = ((Number) body.get("raisedByUserId")).intValue();
+            String type = (String) body.get("requestType");
+            String reason = (String) body.get("reason");
+            BigDecimal amount = toBigDecimal(body.get("amount"));
+            return ResponseEntity.ok(
+                    userService.raiseRefundRequest(orderId, raisedById, type, reason, amount));
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid refund payload" : e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/refund-requests", produces = "application/json")
+    public ResponseEntity<?> listRefundRequests(@RequestParam(required = false) String status) {
+        try {
+            return ResponseEntity.ok(userService.listRefundRequests(status));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/refund-requests/{id}/decision",
+                 consumes = "application/json", produces = "application/json")
+    public ResponseEntity<?> decideRefundRequest(@PathVariable long id,
+                                                  @RequestBody Map<String, Object> body) {
+        try {
+            int managerId = ((Number) body.get("managerUserId")).intValue();
+            String decision = (String) body.get("decision");
+            String notes = (String) body.get("notes");
+            return ResponseEntity.ok(
+                    userService.decideRefundRequest(id, managerId, decision, notes));
+        } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    e.getMessage() == null ? "Invalid decision payload" : e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/management/cash-reconciliation", produces = "application/json")
+    public ResponseEntity<?> cashReconciliation(
+            @RequestParam(required = false) String date,
+            @RequestParam(required = false) BigDecimal openingFloat,
+            @RequestParam(required = false) BigDecimal countedCash) {
+        try {
+            return ResponseEntity.ok(
+                    userService.cashReconciliation(date, openingFloat, countedCash));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping(value = "/management/staff-performance", produces = "application/json")
+    public ResponseEntity<?> managementStaffPerformance(
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
+        try {
+            return ResponseEntity.ok(userService.managementStaffPerformance(from, to));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    private static BigDecimal toBigDecimal(Object raw) {
+        if (raw == null) return null;
+        if (raw instanceof Number) return BigDecimal.valueOf(((Number) raw).doubleValue());
+        if (raw instanceof String s && !s.isBlank()) return new BigDecimal(s);
+        return null;
+    }
+
     private Map<String, Object> toPublicAddress(ShippingAddress a) {
         Map<String, Object> m = new java.util.LinkedHashMap<>();
         m.put("id", a.getId());

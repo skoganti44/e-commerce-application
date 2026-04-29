@@ -47,6 +47,9 @@ public class Supply {
     @Column(name = "order_status")
     private String orderStatus;
 
+    @Column(name = "requested_by_team")
+    private String requestedByTeam;
+
     @Column(name = "requested_at")
     private LocalDateTime requestedAt;
 
@@ -88,6 +91,9 @@ public class Supply {
 
     public String getOrderStatus() { return orderStatus; }
     public void setOrderStatus(String orderStatus) { this.orderStatus = orderStatus; }
+
+    public String getRequestedByTeam() { return requestedByTeam; }
+    public void setRequestedByTeam(String requestedByTeam) { this.requestedByTeam = requestedByTeam; }
 
     public LocalDateTime getRequestedAt() { return requestedAt; }
     public void setRequestedAt(LocalDateTime requestedAt) { this.requestedAt = requestedAt; }

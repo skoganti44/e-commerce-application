@@ -4,10 +4,15 @@
 package com.example.groceryapi.service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,15 +27,20 @@ import com.example.groceryapi.model.Cart;
 import com.example.groceryapi.model.CartItem;
 import com.example.groceryapi.model.Category;
 import com.example.groceryapi.model.DailyStock;
+import com.example.groceryapi.model.DeliveryIssue;
+import com.example.groceryapi.model.DeliveryTrip;
+import com.example.groceryapi.model.DiscountCampaign;
 import com.example.groceryapi.model.OrderItem;
 import com.example.groceryapi.model.Orders;
 import com.example.groceryapi.model.Payment;
 import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.ProductAvailable;
 import com.example.groceryapi.model.ProductImage;
+import com.example.groceryapi.model.RefundRequest;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.ShippingAddress;
 import com.example.groceryapi.model.Supply;
+import com.example.groceryapi.model.Task;
 import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.User;
 import com.example.groceryapi.repository.Repository;
@@ -83,6 +93,30 @@ public class UserService {
 
     private static final Set<String> ALLOWED_DEPARTMENTS = Set.of(
             "bakery", "sales", "kitchen", "delivery", "management");
+
+    private static final Set<String> ALLOWED_TASK_DEPARTMENTS = Set.of(
+            "bakery", "kitchen", "delivery", "management", "sales");
+
+    private static final Set<String> ALLOWED_TASK_PRIORITIES = Set.of(
+            "low", "normal", "high", "urgent");
+
+    private static final Set<String> ALLOWED_TASK_STATUSES = Set.of(
+            "open", "in_progress", "done", "cancelled");
+
+    private static final Set<String> TERMINAL_TASK_STATUSES = Set.of(
+            "done", "cancelled");
+
+    private static final Set<String> ALLOWED_TRIP_STATUSES = Set.of(
+            "picked_up", "out_for_delivery", "delivered", "failed");
+
+    private static final Set<String> TERMINAL_TRIP_STATUSES = Set.of(
+            "delivered", "failed");
+
+    private static final Set<String> ALLOWED_FAILURE_REASONS = Set.of(
+            "customer_not_home", "refused", "damaged", "wrong_address", "other");
+
+    private static final Set<String> ALLOWED_ISSUE_TYPES = Set.of(
+            "vehicle_breakdown", "traffic_delay", "accident", "other");
 
     public User register(String name, String email, String password,
                           String userType, String department) {
@@ -465,6 +499,9 @@ public class UserService {
     private static final Set<String> ALLOWED_PAYMENT_METHODS = Set.of(
             "DEBIT_CARD", "CREDIT_CARD", "GIFT_CARD", "COD");
 
+    private static final Set<String> ALLOWED_COUNTER_PAYMENT_METHODS = Set.of(
+            "CASH", "DEBIT_CARD", "CREDIT_CARD", "UPI");
+
     public ShippingAddress saveShippingAddress(int userid, Map<String, Object> body) {
         User user = repository.findUserById(userid)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + userid));
@@ -564,6 +601,105 @@ public class UserService {
         result.put("status", order.getStatus());
         result.put("paymentStatus", payment.getStatus());
         result.put("paymentMethod", payment.getPaymentMethod());
+        return result;
+    }
+
+    public Map<String, Object> recordCounterSale(List<Map<String, Object>> rawItems,
+                                                 String paymentMethodRaw,
+                                                 BigDecimal cashGiven,
+                                                 String customerName,
+                                                 String customerNotes) {
+        if (rawItems == null || rawItems.isEmpty()) {
+            throw new IllegalArgumentException("At least one item is required");
+        }
+        String paymentMethod = normalizeCode(paymentMethodRaw);
+        if (paymentMethod == null || !ALLOWED_COUNTER_PAYMENT_METHODS.contains(paymentMethod)) {
+            throw new IllegalArgumentException("Invalid payment method: " + paymentMethodRaw);
+        }
+
+        Orders order = new Orders();
+        order.setUser(null);
+        order.setChannel("instore");
+        order.setKitchenStatus("pending");
+        order.setStatus("CONFIRMED");
+
+        StringBuilder notes = new StringBuilder();
+        if (customerName != null && !customerName.isBlank()) {
+            notes.append("Customer: ").append(customerName.trim());
+        }
+        if (customerNotes != null && !customerNotes.isBlank()) {
+            if (notes.length() > 0) notes.append(" — ");
+            notes.append(customerNotes.trim());
+        }
+        if (notes.length() > 0) {
+            order.setCustomerNotes(notes.toString());
+        }
+
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        List<OrderItem> orderItems = new java.util.ArrayList<>();
+        for (Map<String, Object> raw : rawItems) {
+            Object pid = raw.get("productId");
+            Object qty = raw.get("quantity");
+            if (pid == null || qty == null) {
+                throw new IllegalArgumentException("Each item needs productId and quantity");
+            }
+            long productId = ((Number) pid).longValue();
+            int quantity = ((Number) qty).intValue();
+            if (quantity <= 0) {
+                throw new IllegalArgumentException("Quantity must be positive for product " + productId);
+            }
+            Product product = repository.findProductById(productId)
+                    .orElseThrow(() -> new IllegalArgumentException("Product not found: " + productId));
+            String sweetenerType = trimToNull(raw.get("sweetenerType"));
+            String flourType = trimToNull(raw.get("flourType"));
+            BigDecimal unit = computeUnitPrice(product, sweetenerType, flourType);
+            totalAmount = totalAmount.add(unit.multiply(BigDecimal.valueOf(quantity)));
+
+            OrderItem oi = new OrderItem();
+            oi.setProduct(product);
+            oi.setQuantity(quantity);
+            oi.setPrice(unit);
+            oi.setCustomization(trimToNull(raw.get("customization")));
+            oi.setSweetenerType(sweetenerType);
+            Object pct = raw.get("sweetenerPercent");
+            if (pct instanceof Number) oi.setSweetenerPercent(((Number) pct).intValue());
+            oi.setFlourType(flourType);
+            orderItems.add(oi);
+        }
+
+        BigDecimal changeDue = BigDecimal.ZERO;
+        if ("CASH".equals(paymentMethod)) {
+            if (cashGiven == null || cashGiven.compareTo(totalAmount) < 0) {
+                throw new IllegalArgumentException(
+                        "Cash given must be at least the total: " + totalAmount);
+            }
+            changeDue = cashGiven.subtract(totalAmount);
+        }
+
+        order.setTotalAmount(totalAmount);
+        order = repository.saveOrder(order);
+        for (OrderItem oi : orderItems) {
+            oi.setOrder(order);
+            repository.saveOrderItem(oi);
+        }
+
+        Payment payment = new Payment();
+        payment.setOrder(order);
+        payment.setAmount(totalAmount);
+        payment.setPaymentMethod(paymentMethod);
+        payment.setStatus("SUCCESS");
+        payment = repository.savePayment(payment);
+
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("orderId", order.getId());
+        result.put("paymentId", payment.getId());
+        result.put("totalAmount", totalAmount);
+        result.put("status", order.getStatus());
+        result.put("paymentMethod", payment.getPaymentMethod());
+        result.put("paymentStatus", payment.getStatus());
+        result.put("cashGiven", cashGiven);
+        result.put("changeDue", changeDue);
+        result.put("channel", "instore");
         return result;
     }
 
@@ -1014,6 +1150,14 @@ public class UserService {
     }
 
     public Map<String, Object> requestMoreSupply(long supplyId, BigDecimal requestedQty, String urgency) {
+        return requestMoreSupplyByTeam(supplyId, requestedQty, urgency, null);
+    }
+
+    private static final Set<String> ALLOWED_REQUEST_TEAMS =
+            Set.of("kitchen", "bakery", "sales", "delivery", "management");
+
+    public Map<String, Object> requestMoreSupplyByTeam(long supplyId, BigDecimal requestedQty,
+                                                       String urgency, String teamRaw) {
         if (requestedQty == null || requestedQty.signum() <= 0) {
             throw new IllegalArgumentException("requestedQty must be positive");
         }
@@ -1021,11 +1165,18 @@ public class UserService {
         if (!ALLOWED_SUPPLY_ORDER_STATUSES.contains(status) || "received".equals(status)) {
             status = "waiting";
         }
+        String team = teamRaw == null || teamRaw.isBlank()
+                ? "kitchen" : teamRaw.trim().toLowerCase();
+        if (!ALLOWED_REQUEST_TEAMS.contains(team)) {
+            throw new IllegalArgumentException(
+                    "team must be one of: " + ALLOWED_REQUEST_TEAMS);
+        }
         Supply s = repository.findSupplyById(supplyId)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Supply not found: " + supplyId));
         s.setRequestedQty(requestedQty);
         s.setOrderStatus(status);
+        s.setRequestedByTeam(team);
         s.setRequestedAt(LocalDateTime.now());
         return toSupplyMap(repository.saveSupply(s));
     }
@@ -1135,6 +1286,7 @@ public class UserService {
         m.put("outOfStock", out);
         m.put("orderStatus",
                 s.getOrderStatus() == null ? "received" : s.getOrderStatus());
+        m.put("requestedByTeam", s.getRequestedByTeam());
         m.put("requestedAt",
                 s.getRequestedAt() == null ? null : s.getRequestedAt().toString());
         m.put("updatedAt", s.getUpdatedAt() == null ? null : s.getUpdatedAt().toString());
@@ -1172,5 +1324,1470 @@ public class UserService {
             m.put("stockDate", ds.getStockDate() == null ? null : ds.getStockDate().toString());
             return m;
         }).collect(Collectors.toList());
+    }
+
+    public Map<String, Object> salesAnalytics(String fromStr, String toStr) {
+        LocalDate today = LocalDate.now();
+        LocalDate fromDate = parseDateOrDefault(fromStr, today.minusDays(29), "from");
+        LocalDate toDate = parseDateOrDefault(toStr, today, "to");
+        if (fromDate.isAfter(toDate)) {
+            throw new IllegalArgumentException("'from' date must be on or before 'to' date");
+        }
+        LocalDateTime fromTs = fromDate.atStartOfDay();
+        LocalDateTime toTs = toDate.plusDays(1).atStartOfDay();
+
+        List<Orders> orders = repository.findOrdersInRange(fromTs, toTs);
+        List<Long> orderIds = orders.stream().map(Orders::getId).collect(Collectors.toList());
+        List<OrderItem> items = repository.findOrderItemsByOrderIds(orderIds);
+        List<Payment> payments = repository.findPaymentsByOrderIds(orderIds);
+
+        BigDecimal totalRevenue = orders.stream()
+                .map(o -> o.getTotalAmount() == null ? BigDecimal.ZERO : o.getTotalAmount())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        int orderCount = orders.size();
+        BigDecimal avgOrderValue = orderCount == 0
+                ? BigDecimal.ZERO
+                : totalRevenue.divide(BigDecimal.valueOf(orderCount), 2, RoundingMode.HALF_UP);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("from", fromDate.toString());
+        result.put("to", toDate.toString());
+        result.put("totalRevenue", totalRevenue);
+        result.put("orderCount", orderCount);
+        result.put("avgOrderValue", avgOrderValue);
+        result.put("revenueByChannel", revenueByChannel(orders));
+        result.put("revenueByPaymentMethod", revenueByPaymentMethod(payments));
+        result.put("ordersByStatus", countByStatus(orders));
+        result.put("topProducts", topProducts(items, 5));
+        result.put("dailyTrend", dailyTrend(orders, fromDate, toDate));
+        return result;
+    }
+
+    private static LocalDate parseDateOrDefault(String s, LocalDate fallback, String label) {
+        if (s == null || s.isBlank()) return fallback;
+        try {
+            return LocalDate.parse(s.trim());
+        } catch (DateTimeParseException ex) {
+            throw new IllegalArgumentException("Invalid '" + label + "' date (expected YYYY-MM-DD)");
+        }
+    }
+
+    private static Map<String, BigDecimal> revenueByChannel(List<Orders> orders) {
+        Map<String, BigDecimal> out = new LinkedHashMap<>();
+        for (Orders o : orders) {
+            String key = (o.getChannel() == null || o.getChannel().isBlank())
+                    ? "online" : o.getChannel().toLowerCase();
+            BigDecimal amt = o.getTotalAmount() == null ? BigDecimal.ZERO : o.getTotalAmount();
+            out.merge(key, amt, BigDecimal::add);
+        }
+        return out;
+    }
+
+    private static Map<String, BigDecimal> revenueByPaymentMethod(List<Payment> payments) {
+        Map<String, BigDecimal> out = new LinkedHashMap<>();
+        for (Payment p : payments) {
+            if (p.getStatus() != null && p.getStatus().equalsIgnoreCase("FAILED")) continue;
+            String key = p.getPaymentMethod() == null ? "UNKNOWN" : p.getPaymentMethod().toUpperCase();
+            BigDecimal amt = p.getAmount() == null ? BigDecimal.ZERO : p.getAmount();
+            out.merge(key, amt, BigDecimal::add);
+        }
+        return out;
+    }
+
+    private static Map<String, Integer> countByStatus(List<Orders> orders) {
+        Map<String, Integer> out = new LinkedHashMap<>();
+        for (Orders o : orders) {
+            String key = o.getStatus() == null ? "UNKNOWN" : o.getStatus().toUpperCase();
+            out.merge(key, 1, Integer::sum);
+        }
+        return out;
+    }
+
+    private static List<Map<String, Object>> topProducts(List<OrderItem> items, int limit) {
+        Map<Long, long[]> qtyByProduct = new HashMap<>();
+        Map<Long, BigDecimal> revByProduct = new HashMap<>();
+        Map<Long, String> nameByProduct = new HashMap<>();
+        for (OrderItem oi : items) {
+            if (oi.getProduct() == null) continue;
+            Long pid = oi.getProduct().getId();
+            int qty = oi.getQuantity() == null ? 0 : oi.getQuantity();
+            BigDecimal unit = oi.getPrice() == null ? BigDecimal.ZERO : oi.getPrice();
+            qtyByProduct.computeIfAbsent(pid, k -> new long[]{0})[0] += qty;
+            revByProduct.merge(pid, unit.multiply(BigDecimal.valueOf(qty)), BigDecimal::add);
+            nameByProduct.putIfAbsent(pid, oi.getProduct().getName());
+        }
+        return qtyByProduct.entrySet().stream()
+                .map(e -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("productId", e.getKey());
+                    row.put("name", nameByProduct.get(e.getKey()));
+                    row.put("quantitySold", e.getValue()[0]);
+                    row.put("revenue", revByProduct.getOrDefault(e.getKey(), BigDecimal.ZERO));
+                    return row;
+                })
+                .sorted(Comparator.comparing(
+                        (Map<String, Object> r) -> (BigDecimal) r.get("revenue")).reversed())
+                .limit(limit)
+                .collect(Collectors.toList());
+    }
+
+    public Map<String, Object> createTask(int createdByUserId,
+                                          String assignedToDepartmentRaw,
+                                          Integer assignedToUserId,
+                                          String title,
+                                          String description,
+                                          String priorityRaw,
+                                          String dueDateStr,
+                                          Long relatedOrderId) {
+        if (title == null || title.isBlank()) {
+            throw new IllegalArgumentException("title is required");
+        }
+        if (title.length() > 200) {
+            throw new IllegalArgumentException("title must be at most 200 characters");
+        }
+        String dept = assignedToDepartmentRaw == null ? "" : assignedToDepartmentRaw.trim().toLowerCase();
+        if (!ALLOWED_TASK_DEPARTMENTS.contains(dept)) {
+            throw new IllegalArgumentException(
+                    "assignedToDepartment must be one of: " + ALLOWED_TASK_DEPARTMENTS);
+        }
+        String priority = priorityRaw == null || priorityRaw.isBlank()
+                ? "normal" : priorityRaw.trim().toLowerCase();
+        if (!ALLOWED_TASK_PRIORITIES.contains(priority)) {
+            throw new IllegalArgumentException(
+                    "priority must be one of: " + ALLOWED_TASK_PRIORITIES);
+        }
+        LocalDate dueDate = null;
+        if (dueDateStr != null && !dueDateStr.isBlank()) {
+            try {
+                dueDate = LocalDate.parse(dueDateStr.trim());
+            } catch (DateTimeParseException ex) {
+                throw new IllegalArgumentException("Invalid dueDate (expected YYYY-MM-DD)");
+            }
+        }
+        User creator = repository.findUserById(createdByUserId)
+                .orElseThrow(() -> new IllegalArgumentException("Creator user not found: " + createdByUserId));
+        User assignee = null;
+        if (assignedToUserId != null) {
+            assignee = repository.findUserById(assignedToUserId)
+                    .orElseThrow(() -> new IllegalArgumentException("Assignee user not found: " + assignedToUserId));
+        }
+        if (relatedOrderId != null) {
+            repository.findOrderById(relatedOrderId)
+                    .orElseThrow(() -> new IllegalArgumentException("Related order not found: " + relatedOrderId));
+        }
+
+        Task t = new Task();
+        t.setCreatedBy(creator);
+        t.setAssignedToDepartment(dept);
+        t.setAssignedToUser(assignee);
+        t.setTitle(title.trim());
+        t.setDescription(description == null || description.isBlank() ? null : description.trim());
+        t.setPriority(priority);
+        t.setStatus("open");
+        t.setDueDate(dueDate);
+        t.setRelatedOrderId(relatedOrderId);
+        LocalDateTime now = LocalDateTime.now();
+        t.setCreatedAt(now);
+        t.setUpdatedAt(now);
+        Task saved = repository.saveTask(t);
+        return toTaskMap(saved);
+    }
+
+    public List<Map<String, Object>> listTasks(String department, Integer createdByUserId, String status) {
+        List<Task> tasks;
+        if (department != null && !department.isBlank()) {
+            String dept = department.trim().toLowerCase();
+            if (!ALLOWED_TASK_DEPARTMENTS.contains(dept)) {
+                throw new IllegalArgumentException(
+                        "department must be one of: " + ALLOWED_TASK_DEPARTMENTS);
+            }
+            tasks = repository.findTasksByDepartment(dept);
+        } else if (createdByUserId != null) {
+            tasks = repository.findTasksByCreatedBy(createdByUserId);
+        } else {
+            tasks = repository.findAllTasks();
+        }
+        if (status != null && !status.isBlank()) {
+            String s = status.trim().toLowerCase();
+            if (!ALLOWED_TASK_STATUSES.contains(s)) {
+                throw new IllegalArgumentException("status must be one of: " + ALLOWED_TASK_STATUSES);
+            }
+            tasks = tasks.stream()
+                    .filter(t -> s.equalsIgnoreCase(t.getStatus()))
+                    .collect(Collectors.toList());
+        }
+        return tasks.stream().map(UserService::toTaskMap).collect(Collectors.toList());
+    }
+
+    public Map<String, Object> updateTaskStatus(long taskId,
+                                                String newStatusRaw,
+                                                Integer actingUserId,
+                                                String resolutionNotes) {
+        if (newStatusRaw == null || newStatusRaw.isBlank()) {
+            throw new IllegalArgumentException("status is required");
+        }
+        String newStatus = newStatusRaw.trim().toLowerCase();
+        if (!ALLOWED_TASK_STATUSES.contains(newStatus)) {
+            throw new IllegalArgumentException("status must be one of: " + ALLOWED_TASK_STATUSES);
+        }
+        Task t = repository.findTaskById(taskId)
+                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+        String current = t.getStatus() == null ? "open" : t.getStatus().toLowerCase();
+        if (TERMINAL_TASK_STATUSES.contains(current)) {
+            throw new IllegalArgumentException(
+                    "Task is already " + current + " and cannot change status");
+        }
+        t.setStatus(newStatus);
+        LocalDateTime now = LocalDateTime.now();
+        t.setUpdatedAt(now);
+        if (TERMINAL_TASK_STATUSES.contains(newStatus)) {
+            t.setCompletedAt(now);
+            if (actingUserId != null) {
+                User u = repository.findUserById(actingUserId)
+                        .orElseThrow(() -> new IllegalArgumentException("Acting user not found: " + actingUserId));
+                t.setCompletedBy(u);
+            }
+            if (resolutionNotes != null && !resolutionNotes.isBlank()) {
+                t.setResolutionNotes(resolutionNotes.trim());
+            }
+        }
+        return toTaskMap(repository.saveTask(t));
+    }
+
+    private static Map<String, Object> toTaskMap(Task t) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", t.getId());
+        m.put("title", t.getTitle());
+        m.put("description", t.getDescription());
+        m.put("assignedToDepartment", t.getAssignedToDepartment());
+        m.put("assignedToUserId",
+                t.getAssignedToUser() == null ? null : t.getAssignedToUser().getuserid());
+        m.put("assignedToUserName",
+                t.getAssignedToUser() == null ? null : t.getAssignedToUser().getname());
+        m.put("createdByUserId",
+                t.getCreatedBy() == null ? null : t.getCreatedBy().getuserid());
+        m.put("createdByName",
+                t.getCreatedBy() == null ? null : t.getCreatedBy().getname());
+        m.put("priority", t.getPriority());
+        m.put("status", t.getStatus());
+        m.put("dueDate", t.getDueDate() == null ? null : t.getDueDate().toString());
+        m.put("relatedOrderId", t.getRelatedOrderId());
+        m.put("createdAt", t.getCreatedAt() == null ? null : t.getCreatedAt().toString());
+        m.put("updatedAt", t.getUpdatedAt() == null ? null : t.getUpdatedAt().toString());
+        m.put("completedAt", t.getCompletedAt() == null ? null : t.getCompletedAt().toString());
+        m.put("completedByName",
+                t.getCompletedBy() == null ? null : t.getCompletedBy().getname());
+        m.put("resolutionNotes", t.getResolutionNotes());
+        return m;
+    }
+
+    public Map<String, Object> pickUpTrip(long orderId, int driverId) {
+        Orders order = repository.findOrderById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+        String channel = order.getChannel() == null ? "" : order.getChannel().toLowerCase();
+        if (!"online".equals(channel)) {
+            throw new IllegalArgumentException("Only online orders can be delivered");
+        }
+        String kitchen = order.getKitchenStatus() == null ? "" : order.getKitchenStatus().toLowerCase();
+        if (!"done".equals(kitchen)) {
+            throw new IllegalArgumentException(
+                    "Order is not ready for pickup (kitchen status must be 'done')");
+        }
+        repository.findTripByOrderId(orderId).ifPresent(t -> {
+            String s = t.getStatus() == null ? "" : t.getStatus().toLowerCase();
+            if (!"failed".equals(s)) {
+                throw new IllegalArgumentException(
+                        "A trip already exists for this order (status: " + s + ")");
+            }
+        });
+        User driver = repository.findUserById(driverId)
+                .orElseThrow(() -> new IllegalArgumentException("Driver not found: " + driverId));
+
+        DeliveryTrip trip = new DeliveryTrip();
+        trip.setOrder(order);
+        trip.setDriver(driver);
+        trip.setStatus("picked_up");
+        LocalDateTime now = LocalDateTime.now();
+        trip.setPickedUpAt(now);
+        trip.setCreatedAt(now);
+        trip.setUpdatedAt(now);
+
+        order.setKitchenStatus("picked_up");
+        repository.saveOrder(order);
+
+        return toTripMap(repository.saveTrip(trip));
+    }
+
+    public Map<String, Object> markOutForDelivery(long tripId, int driverId) {
+        DeliveryTrip trip = loadDriverTrip(tripId, driverId);
+        String s = trip.getStatus() == null ? "" : trip.getStatus().toLowerCase();
+        if (!"picked_up".equals(s)) {
+            throw new IllegalArgumentException(
+                    "Trip must be in 'picked_up' state to go out for delivery (was: " + s + ")");
+        }
+        trip.setStatus("out_for_delivery");
+        LocalDateTime now = LocalDateTime.now();
+        trip.setOutAt(now);
+        trip.setUpdatedAt(now);
+        if (trip.getOtpCode() == null || trip.getOtpCode().isBlank()) {
+            trip.setOtpCode(generateOtp());
+        }
+        if (trip.getOrder() != null) {
+            trip.getOrder().setKitchenStatus("out_for_delivery");
+            repository.saveOrder(trip.getOrder());
+        }
+        return toTripMap(repository.saveTrip(trip));
+    }
+
+    public Map<String, Object> markDelivered(long tripId,
+                                              int driverId,
+                                              String otp,
+                                              String photoUrl,
+                                              BigDecimal codAmount,
+                                              BigDecimal tipAmount,
+                                              BigDecimal distanceKm,
+                                              String notes) {
+        DeliveryTrip trip = loadDriverTrip(tripId, driverId);
+        String s = trip.getStatus() == null ? "" : trip.getStatus().toLowerCase();
+        if (!"out_for_delivery".equals(s)) {
+            throw new IllegalArgumentException(
+                    "Trip must be 'out_for_delivery' to deliver (was: " + s + ")");
+        }
+        boolean hasPhoto = photoUrl != null && !photoUrl.isBlank();
+        boolean hasOtp = otp != null && !otp.isBlank();
+        if (!hasPhoto && !hasOtp) {
+            throw new IllegalArgumentException(
+                    "Proof of delivery is required: enter the customer OTP or upload a photo");
+        }
+        if (hasOtp && trip.getOtpCode() != null && !trip.getOtpCode().equals(otp.trim())) {
+            throw new IllegalArgumentException("OTP does not match");
+        }
+        if (codAmount != null && codAmount.signum() < 0) {
+            throw new IllegalArgumentException("COD amount cannot be negative");
+        }
+        if (tipAmount != null && tipAmount.signum() < 0) {
+            throw new IllegalArgumentException("Tip cannot be negative");
+        }
+        if (distanceKm != null && distanceKm.signum() < 0) {
+            throw new IllegalArgumentException("Distance cannot be negative");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        trip.setStatus("delivered");
+        trip.setDeliveredAt(now);
+        trip.setUpdatedAt(now);
+        if (hasPhoto) trip.setPhotoProofUrl(photoUrl.trim());
+        if (codAmount != null && codAmount.signum() > 0) {
+            trip.setCodAmount(codAmount);
+            trip.setCodCollectedAt(now);
+        }
+        if (tipAmount != null) trip.setTipAmount(tipAmount);
+        if (distanceKm != null) trip.setDistanceKm(distanceKm);
+        if (notes != null && !notes.isBlank()) trip.setNotes(notes.trim());
+
+        if (trip.getOrder() != null) {
+            trip.getOrder().setKitchenStatus("delivered");
+            trip.getOrder().setStatus("delivered");
+            repository.saveOrder(trip.getOrder());
+        }
+        return toTripMap(repository.saveTrip(trip));
+    }
+
+    public Map<String, Object> markTripFailed(long tripId,
+                                               int driverId,
+                                               String reasonRaw,
+                                               String notes) {
+        if (reasonRaw == null || reasonRaw.isBlank()) {
+            throw new IllegalArgumentException("Failure reason is required");
+        }
+        String reason = reasonRaw.trim().toLowerCase();
+        if (!ALLOWED_FAILURE_REASONS.contains(reason)) {
+            throw new IllegalArgumentException(
+                    "Failure reason must be one of: " + ALLOWED_FAILURE_REASONS);
+        }
+        DeliveryTrip trip = loadDriverTrip(tripId, driverId);
+        String s = trip.getStatus() == null ? "" : trip.getStatus().toLowerCase();
+        if (TERMINAL_TRIP_STATUSES.contains(s)) {
+            throw new IllegalArgumentException(
+                    "Trip is already " + s + " and cannot be failed");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        trip.setStatus("failed");
+        trip.setFailedAt(now);
+        trip.setUpdatedAt(now);
+        trip.setFailureReason(reason);
+        if (notes != null && !notes.isBlank()) trip.setNotes(notes.trim());
+
+        if (trip.getOrder() != null) {
+            trip.getOrder().setKitchenStatus("delivery_failed");
+            repository.saveOrder(trip.getOrder());
+        }
+        return toTripMap(repository.saveTrip(trip));
+    }
+
+    public List<Map<String, Object>> listTripsForDriver(int driverId, String statusFilter) {
+        if (statusFilter != null && !statusFilter.isBlank()) {
+            String s = statusFilter.trim().toLowerCase();
+            if (!"active".equals(s) && !ALLOWED_TRIP_STATUSES.contains(s)) {
+                throw new IllegalArgumentException(
+                        "status must be 'active' or one of: " + ALLOWED_TRIP_STATUSES);
+            }
+            if ("active".equals(s)) {
+                return repository.findActiveTripsByDriver(driverId).stream()
+                        .map(this::toTripMap)
+                        .collect(Collectors.toList());
+            }
+            return repository.findTripsByDriver(driverId).stream()
+                    .filter(t -> s.equalsIgnoreCase(t.getStatus()))
+                    .map(this::toTripMap)
+                    .collect(Collectors.toList());
+        }
+        return repository.findTripsByDriver(driverId).stream()
+                .map(this::toTripMap)
+                .collect(Collectors.toList());
+    }
+
+    public Map<String, Object> logDeliveryIssue(int driverId,
+                                                 String issueTypeRaw,
+                                                 String description,
+                                                 Long tripId) {
+        if (issueTypeRaw == null || issueTypeRaw.isBlank()) {
+            throw new IllegalArgumentException("Issue type is required");
+        }
+        String type = issueTypeRaw.trim().toLowerCase();
+        if (!ALLOWED_ISSUE_TYPES.contains(type)) {
+            throw new IllegalArgumentException(
+                    "Issue type must be one of: " + ALLOWED_ISSUE_TYPES);
+        }
+        if (description == null || description.isBlank()) {
+            throw new IllegalArgumentException("Description is required");
+        }
+        if (description.length() > 500) {
+            throw new IllegalArgumentException("Description must be at most 500 characters");
+        }
+        User driver = repository.findUserById(driverId)
+                .orElseThrow(() -> new IllegalArgumentException("Driver not found: " + driverId));
+        DeliveryIssue issue = new DeliveryIssue();
+        issue.setDriver(driver);
+        issue.setIssueType(type);
+        issue.setDescription(description.trim());
+        issue.setReportedAt(LocalDateTime.now());
+        if (tripId != null) {
+            DeliveryTrip trip = repository.findTripById(tripId)
+                    .orElseThrow(() -> new IllegalArgumentException("Trip not found: " + tripId));
+            issue.setTrip(trip);
+        }
+        return toIssueMap(repository.saveIssue(issue));
+    }
+
+    public List<Map<String, Object>> listIssuesForDriver(int driverId) {
+        return repository.findIssuesByDriver(driverId).stream()
+                .map(UserService::toIssueMap)
+                .collect(Collectors.toList());
+    }
+
+    public Map<String, Object> shiftSummary(int driverId, String fromStr, String toStr) {
+        LocalDate from;
+        LocalDate to;
+        try {
+            from = (fromStr == null || fromStr.isBlank())
+                    ? LocalDate.now() : LocalDate.parse(fromStr);
+            to = (toStr == null || toStr.isBlank())
+                    ? from : LocalDate.parse(toStr);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("Dates must be ISO format yyyy-MM-dd");
+        }
+        if (from.isAfter(to)) {
+            throw new IllegalArgumentException("'from' must be on or before 'to'");
+        }
+        LocalDateTime fromTs = from.atStartOfDay();
+        LocalDateTime toTs = to.plusDays(1).atStartOfDay();
+        List<DeliveryTrip> trips = repository.findTripsByDriverInRange(driverId, fromTs, toTs);
+        int total = trips.size();
+        long delivered = trips.stream().filter(t -> "delivered".equalsIgnoreCase(t.getStatus())).count();
+        long failed = trips.stream().filter(t -> "failed".equalsIgnoreCase(t.getStatus())).count();
+        long inFlight = total - delivered - failed;
+        BigDecimal codTotal = trips.stream()
+                .filter(t -> "delivered".equalsIgnoreCase(t.getStatus()) && t.getCodAmount() != null)
+                .map(DeliveryTrip::getCodAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal tipsTotal = trips.stream()
+                .filter(t -> t.getTipAmount() != null)
+                .map(DeliveryTrip::getTipAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal distanceTotal = trips.stream()
+                .filter(t -> t.getDistanceKm() != null)
+                .map(DeliveryTrip::getDistanceKm)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        Map<String, Long> byFailureReason = new LinkedHashMap<>();
+        for (DeliveryTrip t : trips) {
+            if ("failed".equalsIgnoreCase(t.getStatus()) && t.getFailureReason() != null) {
+                byFailureReason.merge(t.getFailureReason(), 1L, Long::sum);
+            }
+        }
+
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("driverId", driverId);
+        m.put("from", from.toString());
+        m.put("to", to.toString());
+        m.put("totalTrips", total);
+        m.put("delivered", delivered);
+        m.put("failed", failed);
+        m.put("inFlight", inFlight);
+        m.put("codCollected", codTotal);
+        m.put("tipsTotal", tipsTotal);
+        m.put("distanceKm", distanceTotal);
+        m.put("failuresByReason", byFailureReason);
+        return m;
+    }
+
+    private DeliveryTrip loadDriverTrip(long tripId, int driverId) {
+        DeliveryTrip trip = repository.findTripById(tripId)
+                .orElseThrow(() -> new IllegalArgumentException("Trip not found: " + tripId));
+        if (trip.getDriver() == null || trip.getDriver().getuserid() != driverId) {
+            throw new IllegalArgumentException("This trip is not assigned to you");
+        }
+        return trip;
+    }
+
+    private static String generateOtp() {
+        int n = (int) (Math.random() * 9000) + 1000;
+        return String.valueOf(n);
+    }
+
+    private Map<String, Object> toTripMap(DeliveryTrip t) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", t.getId());
+        m.put("status", t.getStatus());
+        Long orderId = t.getOrder() == null ? null : t.getOrder().getId();
+        m.put("orderId", orderId);
+        m.put("orderTotal",
+                t.getOrder() == null ? null : t.getOrder().getTotalAmount());
+        m.put("customerName",
+                (t.getOrder() == null || t.getOrder().getUser() == null)
+                        ? null : t.getOrder().getUser().getname());
+        if (orderId != null) {
+            repository.findShippingAddressByOrderId(orderId).ifPresent(sa -> {
+                StringBuilder addr = new StringBuilder();
+                if (sa.getLine1() != null) addr.append(sa.getLine1());
+                if (sa.getLine2() != null && !sa.getLine2().isBlank())
+                    addr.append(", ").append(sa.getLine2());
+                if (sa.getCity() != null) addr.append(", ").append(sa.getCity());
+                if (sa.getPincode() != null) addr.append(" ").append(sa.getPincode());
+                m.put("shippingAddress", addr.toString());
+                m.put("customerPhone", sa.getPhone());
+            });
+        }
+        m.put("driverId", t.getDriver() == null ? null : t.getDriver().getuserid());
+        m.put("driverName", t.getDriver() == null ? null : t.getDriver().getname());
+        m.put("otpCode", t.getOtpCode());
+        m.put("photoProofUrl", t.getPhotoProofUrl());
+        m.put("codAmount", t.getCodAmount());
+        m.put("codCollectedAt",
+                t.getCodCollectedAt() == null ? null : t.getCodCollectedAt().toString());
+        m.put("tipAmount", t.getTipAmount());
+        m.put("distanceKm", t.getDistanceKm());
+        m.put("failureReason", t.getFailureReason());
+        m.put("notes", t.getNotes());
+        m.put("pickedUpAt",
+                t.getPickedUpAt() == null ? null : t.getPickedUpAt().toString());
+        m.put("outAt", t.getOutAt() == null ? null : t.getOutAt().toString());
+        m.put("deliveredAt",
+                t.getDeliveredAt() == null ? null : t.getDeliveredAt().toString());
+        m.put("failedAt",
+                t.getFailedAt() == null ? null : t.getFailedAt().toString());
+        m.put("createdAt",
+                t.getCreatedAt() == null ? null : t.getCreatedAt().toString());
+        m.put("updatedAt",
+                t.getUpdatedAt() == null ? null : t.getUpdatedAt().toString());
+        return m;
+    }
+
+    private static Map<String, Object> toIssueMap(DeliveryIssue i) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", i.getId());
+        m.put("driverId", i.getDriver() == null ? null : i.getDriver().getuserid());
+        m.put("driverName", i.getDriver() == null ? null : i.getDriver().getname());
+        m.put("tripId", i.getTrip() == null ? null : i.getTrip().getId());
+        m.put("issueType", i.getIssueType());
+        m.put("description", i.getDescription());
+        m.put("reportedAt",
+                i.getReportedAt() == null ? null : i.getReportedAt().toString());
+        m.put("resolvedAt",
+                i.getResolvedAt() == null ? null : i.getResolvedAt().toString());
+        return m;
+    }
+
+    // =========================================================================
+    //  Management aggregations: Live Ops, Orders Audit, Deliveries Audit,
+    //  Day P&L, Staff Performance.  All read-only.
+    // =========================================================================
+
+    private static final int KITCHEN_SLA_MINUTES  = 30;
+    private static final int DELIVERY_SLA_MINUTES = 60;
+
+    public Map<String, Object> managementOps() {
+        List<Orders> pipeline = repository.findOrdersInPipeline();
+        Map<String, Map<String, Long>> kitchenByChannel = new LinkedHashMap<>();
+        kitchenByChannel.put("online", emptyKitchenCounts());
+        kitchenByChannel.put("instore", emptyKitchenCounts());
+
+        List<Map<String, Object>> breaches = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
+
+        for (Orders o : pipeline) {
+            String channel = o.getChannel() == null ? "online" : o.getChannel().toLowerCase();
+            String ks = (o.getKitchenStatus() == null ? "pending" : o.getKitchenStatus()).toLowerCase();
+            kitchenByChannel.computeIfAbsent(channel, k -> emptyKitchenCounts());
+            kitchenByChannel.get(channel).merge(ks, 1L, Long::sum);
+
+            // SLA breach: order has been sitting in kitchen pipeline too long.
+            if (o.getCreatedAt() != null && isKitchenSide(ks)) {
+                long mins = ChronoUnit.MINUTES.between(o.getCreatedAt(), now);
+                if (mins >= KITCHEN_SLA_MINUTES) {
+                    Map<String, Object> b = new LinkedHashMap<>();
+                    b.put("type", "kitchen");
+                    b.put("orderId", o.getId());
+                    b.put("status", ks);
+                    b.put("channel", channel);
+                    b.put("ageMinutes", mins);
+                    b.put("customerName",
+                            o.getUser() == null ? null : o.getUser().getname());
+                    breaches.add(b);
+                }
+            }
+        }
+
+        // Delivery in-flight counts and SLA breaches (out_for_delivery > 60 min).
+        long pickedUp = 0;
+        long outForDelivery = 0;
+        for (DeliveryTrip t : repository.findAllTrips()) {
+            String s = t.getStatus() == null ? "" : t.getStatus().toLowerCase();
+            if ("picked_up".equals(s)) pickedUp++;
+            else if ("out_for_delivery".equals(s)) {
+                outForDelivery++;
+                LocalDateTime since = t.getOutAt() != null ? t.getOutAt() : t.getCreatedAt();
+                if (since != null) {
+                    long mins = ChronoUnit.MINUTES.between(since, now);
+                    if (mins >= DELIVERY_SLA_MINUTES) {
+                        Map<String, Object> b = new LinkedHashMap<>();
+                        b.put("type", "delivery");
+                        b.put("tripId", t.getId());
+                        b.put("orderId",
+                                t.getOrder() == null ? null : t.getOrder().getId());
+                        b.put("status", s);
+                        b.put("ageMinutes", mins);
+                        b.put("driverName",
+                                t.getDriver() == null ? null : t.getDriver().getname());
+                        breaches.add(b);
+                    }
+                }
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("kitchenQueue", kitchenByChannel);
+        Map<String, Long> dlv = new LinkedHashMap<>();
+        dlv.put("pickedUp", pickedUp);
+        dlv.put("outForDelivery", outForDelivery);
+        dlv.put("total", pickedUp + outForDelivery);
+        result.put("deliveryInFlight", dlv);
+        result.put("breaches", breaches);
+        result.put("kitchenSlaMinutes", KITCHEN_SLA_MINUTES);
+        result.put("deliverySlaMinutes", DELIVERY_SLA_MINUTES);
+        result.put("asOf", now.toString());
+        return result;
+    }
+
+    private static Map<String, Long> emptyKitchenCounts() {
+        Map<String, Long> m = new LinkedHashMap<>();
+        for (String s : List.of("pending", "preparing", "ready", "done",
+                                "picked_up", "out_for_delivery")) {
+            m.put(s, 0L);
+        }
+        return m;
+    }
+
+    private static boolean isKitchenSide(String s) {
+        return s == null
+                || List.of("pending", "preparing", "ready", "done").contains(s);
+    }
+
+    public Map<String, Object> managementOrdersAudit(String fromStr, String toStr,
+                                                      String channelFilter,
+                                                      String paymentFilter) {
+        LocalDate[] range = parseDateRange(fromStr, toStr);
+        LocalDateTime fromTs = range[0].atStartOfDay();
+        LocalDateTime toTs   = range[1].plusDays(1).atStartOfDay();
+
+        List<Orders> orders = repository.findOrdersInRange(fromTs, toTs);
+        if (channelFilter != null && !channelFilter.isBlank()
+                && !"all".equalsIgnoreCase(channelFilter)) {
+            String c = channelFilter.toLowerCase();
+            orders = orders.stream()
+                    .filter(o -> c.equalsIgnoreCase(o.getChannel()))
+                    .collect(Collectors.toList());
+        }
+
+        List<Long> ids = orders.stream().map(Orders::getId).collect(Collectors.toList());
+        List<Payment> payments = repository.findPaymentsByOrderIds(ids);
+        Map<Long, Payment> paymentByOrder = new HashMap<>();
+        for (Payment p : payments) {
+            if (p.getOrder() != null && p.getOrder().getId() != null) {
+                paymentByOrder.put(p.getOrder().getId(), p);
+            }
+        }
+
+        if (paymentFilter != null && !paymentFilter.isBlank()
+                && !"all".equalsIgnoreCase(paymentFilter)) {
+            String pm = paymentFilter.toLowerCase();
+            orders = orders.stream().filter(o -> {
+                Payment p = paymentByOrder.get(o.getId());
+                String method = p == null || p.getPaymentMethod() == null
+                        ? "" : p.getPaymentMethod().toLowerCase();
+                return pm.equals(method);
+            }).collect(Collectors.toList());
+        }
+
+        BigDecimal totalRevenue = BigDecimal.ZERO;
+        Map<String, BigDecimal> byChannel = new LinkedHashMap<>();
+        Map<String, BigDecimal> byPaymentMethod = new LinkedHashMap<>();
+        Map<String, Long> countByPaymentMethod = new LinkedHashMap<>();
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Orders o : orders) {
+            BigDecimal amt = o.getTotalAmount() == null ? BigDecimal.ZERO : o.getTotalAmount();
+            totalRevenue = totalRevenue.add(amt);
+            String channel = o.getChannel() == null ? "unknown" : o.getChannel().toLowerCase();
+            byChannel.merge(channel, amt, BigDecimal::add);
+
+            Payment p = paymentByOrder.get(o.getId());
+            String method = p == null || p.getPaymentMethod() == null
+                    ? "unknown" : p.getPaymentMethod().toLowerCase();
+            byPaymentMethod.merge(method, amt, BigDecimal::add);
+            countByPaymentMethod.merge(method, 1L, Long::sum);
+
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("orderId", o.getId());
+            row.put("customerName",
+                    o.getUser() == null ? null : o.getUser().getname());
+            row.put("channel", channel);
+            row.put("status", o.getStatus());
+            row.put("kitchenStatus", o.getKitchenStatus());
+            row.put("totalAmount", amt);
+            row.put("paymentMethod", method);
+            row.put("paymentStatus",
+                    p == null ? null : p.getStatus());
+            row.put("createdAt",
+                    o.getCreatedAt() == null ? null : o.getCreatedAt().toString());
+            rows.add(row);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("from", range[0].toString());
+        result.put("to",   range[1].toString());
+        result.put("count", orders.size());
+        result.put("totalRevenue", totalRevenue);
+        result.put("revenueByChannel", byChannel);
+        result.put("revenueByPaymentMethod", byPaymentMethod);
+        result.put("countByPaymentMethod", countByPaymentMethod);
+        result.put("orders", rows);
+        return result;
+    }
+
+    public Map<String, Object> managementDeliveriesAudit(String fromStr, String toStr,
+                                                          Integer driverId,
+                                                          String statusFilter) {
+        LocalDate[] range = parseDateRange(fromStr, toStr);
+        LocalDateTime fromTs = range[0].atStartOfDay();
+        LocalDateTime toTs   = range[1].plusDays(1).atStartOfDay();
+
+        List<DeliveryTrip> trips = repository.findTripsInRange(fromTs, toTs);
+        if (driverId != null) {
+            trips = trips.stream()
+                    .filter(t -> t.getDriver() != null && t.getDriver().getuserid() == driverId)
+                    .collect(Collectors.toList());
+        }
+        if (statusFilter != null && !statusFilter.isBlank()
+                && !"all".equalsIgnoreCase(statusFilter)) {
+            String s = statusFilter.toLowerCase();
+            trips = trips.stream()
+                    .filter(t -> s.equalsIgnoreCase(t.getStatus()))
+                    .collect(Collectors.toList());
+        }
+
+        long delivered = trips.stream().filter(t -> "delivered".equalsIgnoreCase(t.getStatus())).count();
+        long failed = trips.stream().filter(t -> "failed".equalsIgnoreCase(t.getStatus())).count();
+        long inFlight = trips.size() - delivered - failed;
+        BigDecimal codTotal = trips.stream()
+                .filter(t -> t.getCodAmount() != null && "delivered".equalsIgnoreCase(t.getStatus()))
+                .map(DeliveryTrip::getCodAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal tipsTotal = trips.stream()
+                .filter(t -> t.getTipAmount() != null)
+                .map(DeliveryTrip::getTipAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        List<Map<String, Object>> rows = trips.stream()
+                .map(this::toTripMap)
+                .collect(Collectors.toList());
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("from", range[0].toString());
+        result.put("to",   range[1].toString());
+        result.put("count", trips.size());
+        result.put("delivered", delivered);
+        result.put("failed", failed);
+        result.put("inFlight", inFlight);
+        result.put("codCollected", codTotal);
+        result.put("tipsTotal", tipsTotal);
+        result.put("trips", rows);
+        return result;
+    }
+
+    public Map<String, Object> managementDayPnl(String dateStr) {
+        LocalDate day;
+        try {
+            day = (dateStr == null || dateStr.isBlank())
+                    ? LocalDate.now() : LocalDate.parse(dateStr);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("date must be ISO format yyyy-MM-dd");
+        }
+        LocalDateTime fromTs = day.atStartOfDay();
+        LocalDateTime toTs   = day.plusDays(1).atStartOfDay();
+
+        List<Orders> orders = repository.findOrdersInRange(fromTs, toTs);
+        List<Long> ids = orders.stream().map(Orders::getId).collect(Collectors.toList());
+        List<Payment> payments = repository.findPaymentsByOrderIds(ids);
+        Map<Long, Payment> payByOrder = new HashMap<>();
+        for (Payment p : payments) {
+            if (p.getOrder() != null && p.getOrder().getId() != null) {
+                payByOrder.put(p.getOrder().getId(), p);
+            }
+        }
+        BigDecimal onlineRevenue = BigDecimal.ZERO;
+        BigDecimal counterRevenue = BigDecimal.ZERO;
+        BigDecimal cashRevenue = BigDecimal.ZERO;
+        BigDecimal cardRevenue = BigDecimal.ZERO;
+        BigDecimal upiRevenue = BigDecimal.ZERO;
+        long onlineCount = 0;
+        long counterCount = 0;
+        for (Orders o : orders) {
+            BigDecimal amt = o.getTotalAmount() == null ? BigDecimal.ZERO : o.getTotalAmount();
+            String channel = o.getChannel() == null ? "" : o.getChannel().toLowerCase();
+            if ("online".equals(channel)) {
+                onlineRevenue = onlineRevenue.add(amt);
+                onlineCount++;
+            } else if ("instore".equals(channel) || "pos".equals(channel)) {
+                counterRevenue = counterRevenue.add(amt);
+                counterCount++;
+            }
+            Payment p = payByOrder.get(o.getId());
+            String method = p == null || p.getPaymentMethod() == null
+                    ? "" : p.getPaymentMethod().toLowerCase();
+            switch (method) {
+                case "cash" -> cashRevenue = cashRevenue.add(amt);
+                case "card" -> cardRevenue = cardRevenue.add(amt);
+                case "upi" -> upiRevenue = upiRevenue.add(amt);
+                default -> { /* unknown */ }
+            }
+        }
+
+        // Delivery COD + tips for the same day
+        List<DeliveryTrip> trips = repository.findTripsInRange(fromTs, toTs);
+        BigDecimal cod = trips.stream()
+                .filter(t -> "delivered".equalsIgnoreCase(t.getStatus()) && t.getCodAmount() != null)
+                .map(DeliveryTrip::getCodAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal tips = trips.stream()
+                .filter(t -> t.getTipAmount() != null)
+                .map(DeliveryTrip::getTipAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal totalRevenue = onlineRevenue.add(counterRevenue);
+        BigDecimal grossInflow = totalRevenue.add(tips);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("date", day.toString());
+        result.put("orderCount", onlineCount + counterCount);
+        result.put("onlineOrderCount", onlineCount);
+        result.put("counterOrderCount", counterCount);
+        result.put("onlineRevenue", onlineRevenue);
+        result.put("counterRevenue", counterRevenue);
+        result.put("totalRevenue", totalRevenue);
+        Map<String, Object> byPm = new LinkedHashMap<>();
+        byPm.put("cash", cashRevenue);
+        byPm.put("card", cardRevenue);
+        byPm.put("upi", upiRevenue);
+        result.put("revenueByPaymentMethod", byPm);
+        result.put("codCollected", cod);
+        result.put("tipsCollected", tips);
+        result.put("grossInflow", grossInflow);
+        // Supplier spend / refunds: not yet tracked at the entity level — left as 0
+        // for honest accounting until those slices land.
+        result.put("supplierSpend", BigDecimal.ZERO);
+        result.put("refunds", BigDecimal.ZERO);
+        result.put("net", grossInflow);
+        return result;
+    }
+
+    public Map<String, Object> managementStaffPerformance(String fromStr, String toStr) {
+        LocalDate[] range = parseDateRange(fromStr, toStr);
+        LocalDateTime fromTs = range[0].atStartOfDay();
+        LocalDateTime toTs   = range[1].plusDays(1).atStartOfDay();
+
+        // Drivers — trip stats per driver
+        List<DeliveryTrip> trips = repository.findTripsInRange(fromTs, toTs);
+        Map<Integer, Map<String, Object>> driverStats = new LinkedHashMap<>();
+        for (DeliveryTrip t : trips) {
+            if (t.getDriver() == null) continue;
+            int uid = t.getDriver().getuserid();
+            Map<String, Object> row = driverStats.computeIfAbsent(uid, k -> {
+                Map<String, Object> r = new LinkedHashMap<>();
+                r.put("userId", uid);
+                r.put("name", t.getDriver().getname());
+                r.put("trips", 0L);
+                r.put("delivered", 0L);
+                r.put("failed", 0L);
+                r.put("cod", BigDecimal.ZERO);
+                r.put("tips", BigDecimal.ZERO);
+                r.put("distanceKm", BigDecimal.ZERO);
+                return r;
+            });
+            row.put("trips", ((Long) row.get("trips")) + 1L);
+            String s = t.getStatus() == null ? "" : t.getStatus().toLowerCase();
+            if ("delivered".equals(s)) row.put("delivered", ((Long) row.get("delivered")) + 1L);
+            else if ("failed".equals(s)) row.put("failed", ((Long) row.get("failed")) + 1L);
+            if (t.getCodAmount() != null && "delivered".equals(s)) {
+                row.put("cod", ((BigDecimal) row.get("cod")).add(t.getCodAmount()));
+            }
+            if (t.getTipAmount() != null) {
+                row.put("tips", ((BigDecimal) row.get("tips")).add(t.getTipAmount()));
+            }
+            if (t.getDistanceKm() != null) {
+                row.put("distanceKm", ((BigDecimal) row.get("distanceKm")).add(t.getDistanceKm()));
+            }
+        }
+
+        // Tasks completed per user, grouped by their department
+        List<Task> doneTasks = repository.findTasksCompletedInRange(fromTs, toTs);
+        Map<String, Map<Integer, Map<String, Object>>> staffByDept = new LinkedHashMap<>();
+        for (Task t : doneTasks) {
+            if (t.getCompletedBy() == null) continue;
+            String dept = t.getAssignedToDepartment() == null
+                    ? "unknown" : t.getAssignedToDepartment().toLowerCase();
+            int uid = t.getCompletedBy().getuserid();
+            staffByDept.computeIfAbsent(dept, k -> new LinkedHashMap<>());
+            Map<String, Object> row = staffByDept.get(dept).computeIfAbsent(uid, k -> {
+                Map<String, Object> r = new LinkedHashMap<>();
+                r.put("userId", uid);
+                r.put("name", t.getCompletedBy().getname());
+                r.put("tasksCompleted", 0L);
+                return r;
+            });
+            row.put("tasksCompleted", ((Long) row.get("tasksCompleted")) + 1L);
+        }
+
+        // Tasks created per sales user
+        List<Task> createdTasks = repository.findTasksCreatedInRange(fromTs, toTs);
+        Map<Integer, Map<String, Object>> salesStats = new LinkedHashMap<>();
+        for (Task t : createdTasks) {
+            if (t.getCreatedBy() == null) continue;
+            int uid = t.getCreatedBy().getuserid();
+            Map<String, Object> row = salesStats.computeIfAbsent(uid, k -> {
+                Map<String, Object> r = new LinkedHashMap<>();
+                r.put("userId", uid);
+                r.put("name", t.getCreatedBy().getname());
+                r.put("tasksCreated", 0L);
+                return r;
+            });
+            row.put("tasksCreated", ((Long) row.get("tasksCreated")) + 1L);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("from", range[0].toString());
+        result.put("to",   range[1].toString());
+        result.put("drivers", new ArrayList<>(driverStats.values()));
+        Map<String, List<Map<String, Object>>> deptOut = new LinkedHashMap<>();
+        for (var e : staffByDept.entrySet()) {
+            deptOut.put(e.getKey(), new ArrayList<>(e.getValue().values()));
+        }
+        result.put("staffByDepartment", deptOut);
+        result.put("salesActivity", new ArrayList<>(salesStats.values()));
+        return result;
+    }
+
+    // =========================================================================
+    //  Refund / cancellation / damaged-goods write-off requests
+    // =========================================================================
+
+    private static final Set<String> ALLOWED_REFUND_TYPES =
+            Set.of("refund", "cancellation", "damage_writeoff");
+    private static final Set<String> ALLOWED_REFUND_DECISIONS =
+            Set.of("approved", "rejected");
+
+    public Map<String, Object> raiseRefundRequest(long orderId, int raisedById,
+                                                   String typeRaw, String reason,
+                                                   BigDecimal amount) {
+        if (typeRaw == null || typeRaw.isBlank()) {
+            throw new IllegalArgumentException("requestType is required");
+        }
+        String type = typeRaw.trim().toLowerCase();
+        if (!ALLOWED_REFUND_TYPES.contains(type)) {
+            throw new IllegalArgumentException(
+                    "requestType must be one of: " + ALLOWED_REFUND_TYPES);
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("reason is required");
+        }
+        if (reason.length() > 500) {
+            throw new IllegalArgumentException("reason must be at most 500 characters");
+        }
+        if (amount == null || amount.signum() < 0) {
+            throw new IllegalArgumentException("amount must be zero or positive");
+        }
+        Orders order = repository.findOrderById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+        User raisedBy = repository.findUserById(raisedById)
+                .orElseThrow(() -> new IllegalArgumentException("Raiser user not found: " + raisedById));
+
+        RefundRequest r = new RefundRequest();
+        r.setOrder(order);
+        r.setRaisedBy(raisedBy);
+        r.setRequestType(type);
+        r.setReason(reason.trim());
+        r.setAmount(amount);
+        r.setStatus("pending");
+        r.setCreatedAt(LocalDateTime.now());
+        return toRefundRequestMap(repository.saveRefundRequest(r));
+    }
+
+    public List<Map<String, Object>> listRefundRequests(String statusFilter) {
+        if (statusFilter == null || statusFilter.isBlank() || "all".equalsIgnoreCase(statusFilter)) {
+            return repository.findAllRefundRequests().stream()
+                    .map(UserService::toRefundRequestMap)
+                    .collect(Collectors.toList());
+        }
+        String s = statusFilter.trim().toLowerCase();
+        if (!s.equals("pending") && !ALLOWED_REFUND_DECISIONS.contains(s)) {
+            throw new IllegalArgumentException(
+                    "status must be 'pending', 'approved', 'rejected' or 'all'");
+        }
+        return repository.findRefundRequestsByStatus(s).stream()
+                .map(UserService::toRefundRequestMap)
+                .collect(Collectors.toList());
+    }
+
+    public Map<String, Object> decideRefundRequest(long requestId, int managerUserId,
+                                                    String decisionRaw, String notes) {
+        if (decisionRaw == null || decisionRaw.isBlank()) {
+            throw new IllegalArgumentException("decision is required");
+        }
+        String decision = decisionRaw.trim().toLowerCase();
+        if (!ALLOWED_REFUND_DECISIONS.contains(decision)) {
+            throw new IllegalArgumentException(
+                    "decision must be one of: " + ALLOWED_REFUND_DECISIONS);
+        }
+        RefundRequest r = repository.findRefundRequestById(requestId)
+                .orElseThrow(() -> new IllegalArgumentException("Refund request not found: " + requestId));
+        if (!"pending".equalsIgnoreCase(r.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Refund request is already " + r.getStatus() + " and cannot be changed");
+        }
+        User manager = repository.findUserById(managerUserId)
+                .orElseThrow(() -> new IllegalArgumentException("Manager not found: " + managerUserId));
+
+        r.setStatus(decision);
+        r.setDecidedBy(manager);
+        r.setDecisionNotes(notes == null || notes.isBlank() ? null : notes.trim());
+        r.setDecidedAt(LocalDateTime.now());
+
+        // If approved, mark the underlying order to reflect the outcome.
+        if ("approved".equals(decision) && r.getOrder() != null) {
+            String type = r.getRequestType() == null ? "" : r.getRequestType().toLowerCase();
+            switch (type) {
+                case "cancellation" -> {
+                    r.getOrder().setStatus("cancelled");
+                    r.getOrder().setKitchenStatus("cancelled");
+                }
+                case "refund", "damage_writeoff" -> {
+                    r.getOrder().setStatus("refunded");
+                }
+                default -> { /* unknown type — no order mutation */ }
+            }
+            repository.saveOrder(r.getOrder());
+        }
+        return toRefundRequestMap(repository.saveRefundRequest(r));
+    }
+
+    // =========================================================================
+    //  Cash reconciliation: counter sales vs COD collected vs deliveries
+    // =========================================================================
+
+    public Map<String, Object> cashReconciliation(String dateStr,
+                                                   BigDecimal openingFloat,
+                                                   BigDecimal countedCash) {
+        LocalDate day;
+        try {
+            day = (dateStr == null || dateStr.isBlank())
+                    ? LocalDate.now() : LocalDate.parse(dateStr);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("date must be ISO format yyyy-MM-dd");
+        }
+        if (openingFloat != null && openingFloat.signum() < 0) {
+            throw new IllegalArgumentException("openingFloat cannot be negative");
+        }
+        if (countedCash != null && countedCash.signum() < 0) {
+            throw new IllegalArgumentException("countedCash cannot be negative");
+        }
+        LocalDateTime fromTs = day.atStartOfDay();
+        LocalDateTime toTs   = day.plusDays(1).atStartOfDay();
+
+        List<Orders> orders = repository.findOrdersInRange(fromTs, toTs);
+        List<Long> ids = orders.stream().map(Orders::getId).collect(Collectors.toList());
+        List<Payment> payments = repository.findPaymentsByOrderIds(ids);
+        Map<Long, Payment> payByOrder = new HashMap<>();
+        for (Payment p : payments) {
+            if (p.getOrder() != null && p.getOrder().getId() != null) {
+                payByOrder.put(p.getOrder().getId(), p);
+            }
+        }
+
+        BigDecimal counterCash = BigDecimal.ZERO;
+        BigDecimal counterCard = BigDecimal.ZERO;
+        BigDecimal counterUpi  = BigDecimal.ZERO;
+        long counterCashCount = 0;
+        for (Orders o : orders) {
+            String channel = o.getChannel() == null ? "" : o.getChannel().toLowerCase();
+            if (!"instore".equals(channel) && !"pos".equals(channel)) continue;
+            Payment p = payByOrder.get(o.getId());
+            String method = p == null || p.getPaymentMethod() == null
+                    ? "" : p.getPaymentMethod().toLowerCase();
+            BigDecimal amt = o.getTotalAmount() == null ? BigDecimal.ZERO : o.getTotalAmount();
+            switch (method) {
+                case "cash" -> {
+                    counterCash = counterCash.add(amt);
+                    counterCashCount++;
+                }
+                case "card" -> counterCard = counterCard.add(amt);
+                case "upi"  -> counterUpi = counterUpi.add(amt);
+                default -> { /* unknown */ }
+            }
+        }
+
+        // Cash collected on delivery (COD).
+        List<DeliveryTrip> trips = repository.findTripsInRange(fromTs, toTs);
+        BigDecimal cod = trips.stream()
+                .filter(t -> "delivered".equalsIgnoreCase(t.getStatus()) && t.getCodAmount() != null)
+                .map(DeliveryTrip::getCodAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal opening = openingFloat == null ? BigDecimal.ZERO : openingFloat;
+        BigDecimal expectedCash = opening.add(counterCash).add(cod);
+        BigDecimal actual = countedCash;
+        BigDecimal variance = actual == null ? null : actual.subtract(expectedCash);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("date", day.toString());
+        result.put("openingFloat", opening);
+        result.put("counterCash", counterCash);
+        result.put("counterCashCount", counterCashCount);
+        result.put("counterCard", counterCard);
+        result.put("counterUpi", counterUpi);
+        result.put("codCollected", cod);
+        result.put("expectedCashInDrawer", expectedCash);
+        result.put("countedCash", actual);
+        result.put("variance", variance);
+        result.put("balanced",
+                actual != null && variance != null && variance.signum() == 0);
+        return result;
+    }
+
+    // =========================================================================
+    //  Discount / promo campaign approval
+    // =========================================================================
+
+    private static final Set<String> ALLOWED_CAMPAIGN_DECISIONS =
+            Set.of("approved", "rejected");
+
+    public Map<String, Object> proposeDiscountCampaign(int proposedById, String name,
+                                                        String categoryFilter,
+                                                        BigDecimal discountPercent,
+                                                        String startsOnStr,
+                                                        String endsOnStr) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("name is required");
+        }
+        if (name.length() > 200) {
+            throw new IllegalArgumentException("name must be at most 200 characters");
+        }
+        if (discountPercent == null) {
+            throw new IllegalArgumentException("discountPercent is required");
+        }
+        if (discountPercent.signum() <= 0
+                || discountPercent.compareTo(new BigDecimal("100")) > 0) {
+            throw new IllegalArgumentException("discountPercent must be between 0 and 100");
+        }
+        LocalDate startsOn;
+        LocalDate endsOn;
+        try {
+            startsOn = (startsOnStr == null || startsOnStr.isBlank())
+                    ? LocalDate.now() : LocalDate.parse(startsOnStr);
+            endsOn = (endsOnStr == null || endsOnStr.isBlank())
+                    ? startsOn : LocalDate.parse(endsOnStr);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("Dates must be ISO format yyyy-MM-dd");
+        }
+        if (endsOn.isBefore(startsOn)) {
+            throw new IllegalArgumentException("endsOn cannot be before startsOn");
+        }
+        User proposer = repository.findUserById(proposedById)
+                .orElseThrow(() -> new IllegalArgumentException("Proposer not found: " + proposedById));
+
+        DiscountCampaign d = new DiscountCampaign();
+        d.setName(name.trim());
+        d.setCategoryFilter(categoryFilter == null || categoryFilter.isBlank()
+                ? null : categoryFilter.trim());
+        d.setDiscountPercent(discountPercent);
+        d.setStartsOn(startsOn);
+        d.setEndsOn(endsOn);
+        d.setStatus("pending");
+        d.setProposedBy(proposer);
+        d.setCreatedAt(LocalDateTime.now());
+        return toCampaignMap(repository.saveDiscountCampaign(d));
+    }
+
+    public List<Map<String, Object>> listDiscountCampaigns(String statusFilter) {
+        if (statusFilter == null || statusFilter.isBlank()
+                || "all".equalsIgnoreCase(statusFilter)) {
+            return repository.findAllDiscountCampaigns().stream()
+                    .map(UserService::toCampaignMap)
+                    .collect(Collectors.toList());
+        }
+        String s = statusFilter.trim().toLowerCase();
+        if (!s.equals("pending") && !ALLOWED_CAMPAIGN_DECISIONS.contains(s)) {
+            throw new IllegalArgumentException(
+                    "status must be 'pending', 'approved', 'rejected' or 'all'");
+        }
+        return repository.findDiscountCampaignsByStatus(s).stream()
+                .map(UserService::toCampaignMap)
+                .collect(Collectors.toList());
+    }
+
+    public Map<String, Object> decideDiscountCampaign(long campaignId, int managerUserId,
+                                                       String decisionRaw, String notes) {
+        if (decisionRaw == null || decisionRaw.isBlank()) {
+            throw new IllegalArgumentException("decision is required");
+        }
+        String decision = decisionRaw.trim().toLowerCase();
+        if (!ALLOWED_CAMPAIGN_DECISIONS.contains(decision)) {
+            throw new IllegalArgumentException(
+                    "decision must be one of: " + ALLOWED_CAMPAIGN_DECISIONS);
+        }
+        DiscountCampaign d = repository.findDiscountCampaignById(campaignId)
+                .orElseThrow(() -> new IllegalArgumentException("Campaign not found: " + campaignId));
+        if (!"pending".equalsIgnoreCase(d.getStatus())) {
+            throw new IllegalArgumentException(
+                    "Campaign is already " + d.getStatus() + " and cannot be changed");
+        }
+        User manager = repository.findUserById(managerUserId)
+                .orElseThrow(() -> new IllegalArgumentException("Manager not found: " + managerUserId));
+
+        d.setStatus(decision);
+        d.setDecidedBy(manager);
+        d.setDecisionNotes(notes == null || notes.isBlank() ? null : notes.trim());
+        d.setDecidedAt(LocalDateTime.now());
+        return toCampaignMap(repository.saveDiscountCampaign(d));
+    }
+
+    private static Map<String, Object> toCampaignMap(DiscountCampaign d) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", d.getId());
+        m.put("name", d.getName());
+        m.put("categoryFilter", d.getCategoryFilter());
+        m.put("discountPercent", d.getDiscountPercent());
+        m.put("startsOn", d.getStartsOn() == null ? null : d.getStartsOn().toString());
+        m.put("endsOn", d.getEndsOn() == null ? null : d.getEndsOn().toString());
+        m.put("status", d.getStatus());
+        m.put("proposedById",
+                d.getProposedBy() == null ? null : d.getProposedBy().getuserid());
+        m.put("proposedByName",
+                d.getProposedBy() == null ? null : d.getProposedBy().getname());
+        m.put("decidedById",
+                d.getDecidedBy() == null ? null : d.getDecidedBy().getuserid());
+        m.put("decidedByName",
+                d.getDecidedBy() == null ? null : d.getDecidedBy().getname());
+        m.put("decisionNotes", d.getDecisionNotes());
+        m.put("createdAt",
+                d.getCreatedAt() == null ? null : d.getCreatedAt().toString());
+        m.put("decidedAt",
+                d.getDecidedAt() == null ? null : d.getDecidedAt().toString());
+        return m;
+    }
+
+    // =========================================================================
+    //  Corporate / catering order sign-off
+    // =========================================================================
+
+    private static final Set<String> ALLOWED_APPROVAL_DECISIONS = Set.of("approved", "rejected");
+
+    public Map<String, Object> flagOrderForApproval(long orderId, String notes) {
+        Orders order = repository.findOrderById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+        order.setRequiresApproval(true);
+        if (order.getApprovalStatus() == null
+                || "pending".equalsIgnoreCase(order.getApprovalStatus())) {
+            order.setApprovalStatus("pending");
+        } else {
+            throw new IllegalArgumentException(
+                    "Order already has decision: " + order.getApprovalStatus());
+        }
+        if (notes != null && !notes.isBlank()) {
+            order.setApprovalNotes(notes.trim());
+        }
+        // Until approved, kitchen should not start.
+        if (order.getKitchenStatus() == null
+                || "pending".equalsIgnoreCase(order.getKitchenStatus())) {
+            order.setKitchenStatus("awaiting_approval");
+        }
+        return toApprovalMap(repository.saveOrder(order));
+    }
+
+    public List<Map<String, Object>> listOrdersPendingApproval() {
+        return repository.findOrdersPendingApproval().stream()
+                .map(UserService::toApprovalMap)
+                .collect(Collectors.toList());
+    }
+
+    public Map<String, Object> decideOrderApproval(long orderId, int managerUserId,
+                                                    String decisionRaw, String notes) {
+        if (decisionRaw == null || decisionRaw.isBlank()) {
+            throw new IllegalArgumentException("decision is required");
+        }
+        String decision = decisionRaw.trim().toLowerCase();
+        if (!ALLOWED_APPROVAL_DECISIONS.contains(decision)) {
+            throw new IllegalArgumentException(
+                    "decision must be one of: " + ALLOWED_APPROVAL_DECISIONS);
+        }
+        Orders order = repository.findOrderById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+        if (order.getRequiresApproval() == null || !order.getRequiresApproval()) {
+            throw new IllegalArgumentException("Order is not flagged for approval");
+        }
+        if (order.getApprovalStatus() != null
+                && !"pending".equalsIgnoreCase(order.getApprovalStatus())) {
+            throw new IllegalArgumentException(
+                    "Order is already " + order.getApprovalStatus());
+        }
+        User manager = repository.findUserById(managerUserId)
+                .orElseThrow(() -> new IllegalArgumentException("Manager not found: " + managerUserId));
+
+        order.setApprovalStatus(decision);
+        order.setApprovedBy(manager);
+        order.setApprovedAt(LocalDateTime.now());
+        if (notes != null && !notes.isBlank()) {
+            order.setApprovalNotes(notes.trim());
+        }
+        if ("approved".equals(decision)) {
+            // Release the order to the kitchen.
+            order.setKitchenStatus("pending");
+        } else {
+            order.setStatus("cancelled");
+            order.setKitchenStatus("cancelled");
+        }
+        return toApprovalMap(repository.saveOrder(order));
+    }
+
+    private static Map<String, Object> toApprovalMap(Orders o) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("orderId", o.getId());
+        m.put("totalAmount", o.getTotalAmount());
+        m.put("channel", o.getChannel());
+        m.put("status", o.getStatus());
+        m.put("kitchenStatus", o.getKitchenStatus());
+        m.put("customerName", o.getUser() == null ? null : o.getUser().getname());
+        m.put("requiresApproval", o.getRequiresApproval());
+        m.put("approvalStatus", o.getApprovalStatus());
+        m.put("approvalNotes", o.getApprovalNotes());
+        m.put("approvedById",
+                o.getApprovedBy() == null ? null : o.getApprovedBy().getuserid());
+        m.put("approvedByName",
+                o.getApprovedBy() == null ? null : o.getApprovedBy().getname());
+        m.put("approvedAt",
+                o.getApprovedAt() == null ? null : o.getApprovedAt().toString());
+        m.put("createdAt",
+                o.getCreatedAt() == null ? null : o.getCreatedAt().toString());
+        return m;
+    }
+
+    private static Map<String, Object> toRefundRequestMap(RefundRequest r) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", r.getId());
+        m.put("orderId", r.getOrder() == null ? null : r.getOrder().getId());
+        m.put("orderTotal",
+                r.getOrder() == null ? null : r.getOrder().getTotalAmount());
+        m.put("customerName",
+                (r.getOrder() == null || r.getOrder().getUser() == null)
+                        ? null : r.getOrder().getUser().getname());
+        m.put("requestType", r.getRequestType());
+        m.put("reason", r.getReason());
+        m.put("amount", r.getAmount());
+        m.put("status", r.getStatus());
+        m.put("raisedById",
+                r.getRaisedBy() == null ? null : r.getRaisedBy().getuserid());
+        m.put("raisedByName",
+                r.getRaisedBy() == null ? null : r.getRaisedBy().getname());
+        m.put("decidedById",
+                r.getDecidedBy() == null ? null : r.getDecidedBy().getuserid());
+        m.put("decidedByName",
+                r.getDecidedBy() == null ? null : r.getDecidedBy().getname());
+        m.put("decisionNotes", r.getDecisionNotes());
+        m.put("createdAt",
+                r.getCreatedAt() == null ? null : r.getCreatedAt().toString());
+        m.put("decidedAt",
+                r.getDecidedAt() == null ? null : r.getDecidedAt().toString());
+        return m;
+    }
+
+    private static LocalDate[] parseDateRange(String fromStr, String toStr) {
+        LocalDate from;
+        LocalDate to;
+        try {
+            from = (fromStr == null || fromStr.isBlank())
+                    ? LocalDate.now() : LocalDate.parse(fromStr);
+            to = (toStr == null || toStr.isBlank()) ? from : LocalDate.parse(toStr);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("Dates must be ISO format yyyy-MM-dd");
+        }
+        if (from.isAfter(to)) {
+            throw new IllegalArgumentException("'from' must be on or before 'to'");
+        }
+        return new LocalDate[]{from, to};
+    }
+
+    private static List<Map<String, Object>> dailyTrend(List<Orders> orders, LocalDate from, LocalDate to) {
+        Map<LocalDate, BigDecimal> revByDay = new LinkedHashMap<>();
+        Map<LocalDate, Integer> countByDay = new LinkedHashMap<>();
+        for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
+            revByDay.put(d, BigDecimal.ZERO);
+            countByDay.put(d, 0);
+        }
+        for (Orders o : orders) {
+            if (o.getCreatedAt() == null) continue;
+            LocalDate d = o.getCreatedAt().toLocalDate();
+            if (!revByDay.containsKey(d)) continue;
+            BigDecimal amt = o.getTotalAmount() == null ? BigDecimal.ZERO : o.getTotalAmount();
+            revByDay.merge(d, amt, BigDecimal::add);
+            countByDay.merge(d, 1, Integer::sum);
+        }
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (LocalDate d : revByDay.keySet()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("date", d.toString());
+            row.put("revenue", revByDay.get(d));
+            row.put("orderCount", countByDay.get(d));
+            rows.add(row);
+        }
+        return rows;
     }
 }

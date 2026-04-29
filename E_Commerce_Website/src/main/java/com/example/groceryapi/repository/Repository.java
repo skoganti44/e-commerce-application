@@ -10,19 +10,25 @@ import com.example.groceryapi.model.Cart;
 import com.example.groceryapi.model.CartItem;
 import com.example.groceryapi.model.Category;
 import com.example.groceryapi.model.DailyStock;
+import com.example.groceryapi.model.DeliveryIssue;
+import com.example.groceryapi.model.DeliveryTrip;
+import com.example.groceryapi.model.DiscountCampaign;
 import com.example.groceryapi.model.OrderItem;
 import com.example.groceryapi.model.Orders;
 import com.example.groceryapi.model.Payment;
 import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.ProductAvailable;
 import com.example.groceryapi.model.ProductImage;
+import com.example.groceryapi.model.RefundRequest;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.ShippingAddress;
 import com.example.groceryapi.model.Supply;
+import com.example.groceryapi.model.Task;
 import com.example.groceryapi.model.UserRole;
 import com.example.groceryapi.model.User;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -70,10 +76,69 @@ public class Repository {
     private static final String SELECT_ROLES_BY_USER_ID = "SELECT ur.role FROM UserRole ur WHERE ur.user.userid = :userid";
 
     private static final String SELECT_PAYMENTS_BY_USER_ID = "SELECT p FROM Payment p WHERE p.order.user.userid = :userid";
+    private static final String SELECT_ORDERS_IN_RANGE =
+            "SELECT o FROM Orders o WHERE o.createdAt >= :from AND o.createdAt < :to ORDER BY o.createdAt ASC";
+    private static final String SELECT_PAYMENTS_BY_ORDER_IDS =
+            "SELECT p FROM Payment p WHERE p.order.id IN :orderIds";
 
     private static final String SELECT_ALL_SUPPLIES = "SELECT s FROM Supply s ORDER BY s.name ASC";
     private static final String SELECT_SUPPLY_BY_NAME = "SELECT s FROM Supply s WHERE LOWER(s.name) = LOWER(:name)";
     private static final String COUNT_SUPPLIES = "SELECT COUNT(s) FROM Supply s";
+
+    private static final String SELECT_ALL_TASKS = "SELECT t FROM Task t ORDER BY t.createdAt DESC";
+    private static final String SELECT_TASKS_BY_DEPARTMENT =
+            "SELECT t FROM Task t WHERE LOWER(t.assignedToDepartment) = LOWER(:dept) ORDER BY t.createdAt DESC";
+    private static final String SELECT_TASKS_BY_CREATED_BY =
+            "SELECT t FROM Task t WHERE t.createdBy.userid = :userid ORDER BY t.createdAt DESC";
+
+    private static final String SELECT_TRIP_BY_ORDER_ID =
+            "SELECT dt FROM DeliveryTrip dt WHERE dt.order.id = :orderId";
+    private static final String SELECT_TRIPS_BY_DRIVER =
+            "SELECT dt FROM DeliveryTrip dt WHERE dt.driver.userid = :driverId ORDER BY dt.createdAt DESC";
+    private static final String SELECT_ACTIVE_TRIPS_BY_DRIVER =
+            "SELECT dt FROM DeliveryTrip dt WHERE dt.driver.userid = :driverId " +
+            "AND LOWER(dt.status) IN ('picked_up','out_for_delivery') " +
+            "ORDER BY dt.createdAt ASC";
+    private static final String SELECT_TRIPS_BY_DRIVER_IN_RANGE =
+            "SELECT dt FROM DeliveryTrip dt WHERE dt.driver.userid = :driverId " +
+            "AND dt.createdAt >= :from AND dt.createdAt < :to " +
+            "ORDER BY dt.createdAt ASC";
+    private static final String SELECT_ISSUES_BY_DRIVER =
+            "SELECT di FROM DeliveryIssue di WHERE di.driver.userid = :driverId " +
+            "ORDER BY di.reportedAt DESC";
+    private static final String SELECT_TRIPS_IN_RANGE =
+            "SELECT dt FROM DeliveryTrip dt WHERE dt.createdAt >= :from AND dt.createdAt < :to " +
+            "ORDER BY dt.createdAt DESC";
+    private static final String SELECT_ALL_TRIPS =
+            "SELECT dt FROM DeliveryTrip dt ORDER BY dt.createdAt DESC";
+    private static final String SELECT_ORDERS_NOT_DELIVERED_BEFORE =
+            "SELECT o FROM Orders o WHERE LOWER(COALESCE(o.kitchenStatus, 'pending')) IN " +
+            "('pending','preparing','ready','done','picked_up','out_for_delivery') " +
+            "ORDER BY o.createdAt ASC";
+    private static final String SELECT_USERS_BY_ROLE =
+            "SELECT DISTINCT ur.user FROM UserRole ur WHERE LOWER(ur.role.role) = LOWER(:role)";
+    private static final String SELECT_USERS_BY_DEPARTMENT =
+            "SELECT DISTINCT ur.user FROM UserRole ur " +
+            "WHERE LOWER(ur.role.department) = LOWER(:department)";
+    private static final String SELECT_TASKS_IN_RANGE_COMPLETED =
+            "SELECT t FROM Task t WHERE LOWER(t.status) = 'done' " +
+            "AND t.completedAt >= :from AND t.completedAt < :to";
+    private static final String SELECT_TASKS_IN_RANGE_CREATED =
+            "SELECT t FROM Task t WHERE t.createdAt >= :from AND t.createdAt < :to";
+    private static final String SELECT_ORDERS_PENDING_APPROVAL =
+            "SELECT o FROM Orders o WHERE o.requiresApproval = TRUE " +
+            "AND (o.approvalStatus IS NULL OR LOWER(o.approvalStatus) = 'pending') " +
+            "ORDER BY o.createdAt ASC";
+    private static final String SELECT_ALL_REFUND_REQUESTS =
+            "SELECT r FROM RefundRequest r ORDER BY r.createdAt DESC";
+    private static final String SELECT_REFUND_REQUESTS_BY_STATUS =
+            "SELECT r FROM RefundRequest r WHERE LOWER(r.status) = LOWER(:status) ORDER BY r.createdAt DESC";
+    private static final String DELETE_ALL_REFUND_REQUESTS = "DELETE FROM RefundRequest";
+    private static final String SELECT_ALL_DISCOUNT_CAMPAIGNS =
+            "SELECT d FROM DiscountCampaign d ORDER BY d.createdAt DESC";
+    private static final String SELECT_DISCOUNT_CAMPAIGNS_BY_STATUS =
+            "SELECT d FROM DiscountCampaign d WHERE LOWER(d.status) = LOWER(:status) ORDER BY d.createdAt DESC";
+    private static final String DELETE_ALL_DISCOUNT_CAMPAIGNS = "DELETE FROM DiscountCampaign";
 
     private static final String DELETE_PAYMENTS_BY_USER_ID = "DELETE FROM Payment p WHERE p.order.id IN (SELECT o.id FROM Orders o WHERE o.user.userid = :userid)";
     private static final String DELETE_ORDER_ITEMS_BY_USER_ID = "DELETE FROM OrderItem oi WHERE oi.order.id IN (SELECT o.id FROM Orders o WHERE o.user.userid = :userid)";
@@ -81,6 +146,8 @@ public class Repository {
 
     private static final String SELECT_LATEST_SHIPPING_ADDRESS_BY_USER_ID =
             "SELECT sa FROM ShippingAddress sa WHERE sa.user.userid = :userid ORDER BY sa.id DESC";
+    private static final String SELECT_SHIPPING_ADDRESS_BY_ORDER_ID =
+            "SELECT sa FROM ShippingAddress sa WHERE sa.order.id = :orderId ORDER BY sa.id DESC";
     private static final String DELETE_CART_ITEMS_BY_USER_ID =
             "DELETE FROM CartItem ci WHERE ci.cart.id IN (SELECT c.id FROM Cart c WHERE c.user.userid = :userid)";
 
@@ -93,6 +160,9 @@ public class Repository {
     private static final String DELETE_ALL_PRODUCT_IMAGES = "DELETE FROM ProductImage";
     private static final String DELETE_ALL_PRODUCTS_AVAILABLE = "DELETE FROM ProductAvailable";
     private static final String DELETE_ALL_PRODUCTS = "DELETE FROM Product";
+    private static final String DELETE_ALL_TASKS = "DELETE FROM Task";
+    private static final String DELETE_ALL_DELIVERY_ISSUES = "DELETE FROM DeliveryIssue";
+    private static final String DELETE_ALL_DELIVERY_TRIPS = "DELETE FROM DeliveryTrip";
 
     @PersistenceContext
     private EntityManager em;
@@ -128,6 +198,11 @@ public class Repository {
     }
 
     public void deleteAllUsers() {
+        em.createQuery(DELETE_ALL_DISCOUNT_CAMPAIGNS).executeUpdate();
+        em.createQuery(DELETE_ALL_REFUND_REQUESTS).executeUpdate();
+        em.createQuery(DELETE_ALL_DELIVERY_ISSUES).executeUpdate();
+        em.createQuery(DELETE_ALL_DELIVERY_TRIPS).executeUpdate();
+        em.createQuery(DELETE_ALL_TASKS).executeUpdate();
         em.createQuery(DELETE_ALL_SHIPPING_ADDRESSES).executeUpdate();
         em.createQuery(DELETE_ALL_PAYMENTS).executeUpdate();
         em.createQuery(DELETE_ALL_ORDER_ITEMS).executeUpdate();
@@ -155,6 +230,104 @@ public class Repository {
                 .setMaxResults(1)
                 .getResultStream()
                 .findFirst();
+    }
+
+    public Optional<ShippingAddress> findShippingAddressByOrderId(long orderId) {
+        return em.createQuery(SELECT_SHIPPING_ADDRESS_BY_ORDER_ID, ShippingAddress.class)
+                .setParameter("orderId", orderId)
+                .setMaxResults(1)
+                .getResultStream()
+                .findFirst();
+    }
+
+    public List<DeliveryTrip> findAllTrips() {
+        return em.createQuery(SELECT_ALL_TRIPS, DeliveryTrip.class).getResultList();
+    }
+
+    public List<DeliveryTrip> findTripsInRange(LocalDateTime from, LocalDateTime to) {
+        return em.createQuery(SELECT_TRIPS_IN_RANGE, DeliveryTrip.class)
+                .setParameter("from", from)
+                .setParameter("to", to)
+                .getResultList();
+    }
+
+    public List<Orders> findOrdersInPipeline() {
+        return em.createQuery(SELECT_ORDERS_NOT_DELIVERED_BEFORE, Orders.class).getResultList();
+    }
+
+    public List<User> findUsersByRole(String role) {
+        return em.createQuery(SELECT_USERS_BY_ROLE, User.class)
+                .setParameter("role", role)
+                .getResultList();
+    }
+
+    public List<User> findUsersByDepartment(String department) {
+        return em.createQuery(SELECT_USERS_BY_DEPARTMENT, User.class)
+                .setParameter("department", department)
+                .getResultList();
+    }
+
+    public List<Task> findTasksCompletedInRange(LocalDateTime from, LocalDateTime to) {
+        return em.createQuery(SELECT_TASKS_IN_RANGE_COMPLETED, Task.class)
+                .setParameter("from", from)
+                .setParameter("to", to)
+                .getResultList();
+    }
+
+    public List<Task> findTasksCreatedInRange(LocalDateTime from, LocalDateTime to) {
+        return em.createQuery(SELECT_TASKS_IN_RANGE_CREATED, Task.class)
+                .setParameter("from", from)
+                .setParameter("to", to)
+                .getResultList();
+    }
+
+    public List<Orders> findOrdersPendingApproval() {
+        return em.createQuery(SELECT_ORDERS_PENDING_APPROVAL, Orders.class)
+                .getResultList();
+    }
+
+    public RefundRequest saveRefundRequest(RefundRequest r) {
+        if (r.getId() == null) {
+            em.persist(r);
+            return r;
+        }
+        return em.merge(r);
+    }
+
+    public Optional<RefundRequest> findRefundRequestById(long id) {
+        return Optional.ofNullable(em.find(RefundRequest.class, id));
+    }
+
+    public List<RefundRequest> findAllRefundRequests() {
+        return em.createQuery(SELECT_ALL_REFUND_REQUESTS, RefundRequest.class).getResultList();
+    }
+
+    public List<RefundRequest> findRefundRequestsByStatus(String status) {
+        return em.createQuery(SELECT_REFUND_REQUESTS_BY_STATUS, RefundRequest.class)
+                .setParameter("status", status)
+                .getResultList();
+    }
+
+    public DiscountCampaign saveDiscountCampaign(DiscountCampaign d) {
+        if (d.getId() == null) {
+            em.persist(d);
+            return d;
+        }
+        return em.merge(d);
+    }
+
+    public Optional<DiscountCampaign> findDiscountCampaignById(long id) {
+        return Optional.ofNullable(em.find(DiscountCampaign.class, id));
+    }
+
+    public List<DiscountCampaign> findAllDiscountCampaigns() {
+        return em.createQuery(SELECT_ALL_DISCOUNT_CAMPAIGNS, DiscountCampaign.class).getResultList();
+    }
+
+    public List<DiscountCampaign> findDiscountCampaignsByStatus(String status) {
+        return em.createQuery(SELECT_DISCOUNT_CAMPAIGNS_BY_STATUS, DiscountCampaign.class)
+                .setParameter("status", status)
+                .getResultList();
     }
 
     public int deleteCartItemsByUserId(int userid) {
@@ -406,6 +579,22 @@ public class Repository {
                 .getResultList();
     }
 
+    public List<Orders> findOrdersInRange(LocalDateTime from, LocalDateTime to) {
+        return em.createQuery(SELECT_ORDERS_IN_RANGE, Orders.class)
+                .setParameter("from", from)
+                .setParameter("to", to)
+                .getResultList();
+    }
+
+    public List<Payment> findPaymentsByOrderIds(List<Long> orderIds) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return List.of();
+        }
+        return em.createQuery(SELECT_PAYMENTS_BY_ORDER_IDS, Payment.class)
+                .setParameter("orderIds", orderIds)
+                .getResultList();
+    }
+
     public ProductAvailable saveProductAvailable(ProductAvailable pa) {
         if (pa.getId() == null) {
             em.persist(pa);
@@ -460,5 +649,86 @@ public class Repository {
             return supply;
         }
         return em.merge(supply);
+    }
+
+    public Task saveTask(Task task) {
+        if (task.getId() == null) {
+            em.persist(task);
+            return task;
+        }
+        return em.merge(task);
+    }
+
+    public Optional<Task> findTaskById(long id) {
+        return Optional.ofNullable(em.find(Task.class, id));
+    }
+
+    public List<Task> findAllTasks() {
+        return em.createQuery(SELECT_ALL_TASKS, Task.class).getResultList();
+    }
+
+    public List<Task> findTasksByDepartment(String department) {
+        return em.createQuery(SELECT_TASKS_BY_DEPARTMENT, Task.class)
+                .setParameter("dept", department)
+                .getResultList();
+    }
+
+    public List<Task> findTasksByCreatedBy(int userid) {
+        return em.createQuery(SELECT_TASKS_BY_CREATED_BY, Task.class)
+                .setParameter("userid", userid)
+                .getResultList();
+    }
+
+    public DeliveryTrip saveTrip(DeliveryTrip trip) {
+        if (trip.getId() == null) {
+            em.persist(trip);
+            return trip;
+        }
+        return em.merge(trip);
+    }
+
+    public Optional<DeliveryTrip> findTripById(long id) {
+        return Optional.ofNullable(em.find(DeliveryTrip.class, id));
+    }
+
+    public Optional<DeliveryTrip> findTripByOrderId(long orderId) {
+        return em.createQuery(SELECT_TRIP_BY_ORDER_ID, DeliveryTrip.class)
+                .setParameter("orderId", orderId)
+                .getResultStream()
+                .findFirst();
+    }
+
+    public List<DeliveryTrip> findTripsByDriver(int driverId) {
+        return em.createQuery(SELECT_TRIPS_BY_DRIVER, DeliveryTrip.class)
+                .setParameter("driverId", driverId)
+                .getResultList();
+    }
+
+    public List<DeliveryTrip> findActiveTripsByDriver(int driverId) {
+        return em.createQuery(SELECT_ACTIVE_TRIPS_BY_DRIVER, DeliveryTrip.class)
+                .setParameter("driverId", driverId)
+                .getResultList();
+    }
+
+    public List<DeliveryTrip> findTripsByDriverInRange(int driverId, LocalDateTime from, LocalDateTime to) {
+        return em.createQuery(SELECT_TRIPS_BY_DRIVER_IN_RANGE, DeliveryTrip.class)
+                .setParameter("driverId", driverId)
+                .setParameter("from", from)
+                .setParameter("to", to)
+                .getResultList();
+    }
+
+    public DeliveryIssue saveIssue(DeliveryIssue issue) {
+        if (issue.getId() == null) {
+            em.persist(issue);
+            return issue;
+        }
+        return em.merge(issue);
+    }
+
+    public List<DeliveryIssue> findIssuesByDriver(int driverId) {
+        return em.createQuery(SELECT_ISSUES_BY_DRIVER, DeliveryIssue.class)
+                .setParameter("driverId", driverId)
+                .getResultList();
     }
 }

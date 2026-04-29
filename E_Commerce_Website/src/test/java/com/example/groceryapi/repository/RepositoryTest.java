@@ -95,8 +95,7 @@ repository.saveRole(newRole("Bob Johnson", "Engineer", TestData.IT));
 List<Role> roles = repository.findAllRoles();
 
 assertThat(roles).hasSize(2);
-assertThat(roles).extracting(Role::getFullName).containsExactlyInAnyOrder("Alice
-Smith", "Bob Johnson");
+assertThat(roles).extracting(Role::getFullName).containsExactlyInAnyOrder("Alice Smith", "Bob Johnson");
 }
 
     @Test
@@ -193,8 +192,7 @@ repository.findUserRolesByUserId(john.getuserid());
 
 assertThat(userRoles).hasSize(1);
 assertThat(userRoles.get(0).getUser().getname()).isEqualTo("John");
-assertThat(userRoles.get(0).getRole().getFullName()).isEqualTo("Alice
-Smith");
+assertThat(userRoles.get(0).getRole().getFullName()).isEqualTo("Alice Smith");
 }
 
 @Test
@@ -213,8 +211,7 @@ repository.findUserRolesByRoleId(engineer.getId());
 
 assertThat(userRoles).hasSize(1);
 assertThat(userRoles.get(0).getUser().getname()).isEqualTo("Jane");
-assertThat(userRoles.get(0).getRole().getFullName()).isEqualTo("Bob
-Johnson");
+assertThat(userRoles.get(0).getRole().getFullName()).isEqualTo("Bob Johnson");
 }
 
     @Test
@@ -520,8 +517,7 @@ Johnson");
         assertThat(repository.findPaymentsByUserId(user.getuserid())).isEmpty();
     }
 
-    // ========== ProductAvailable / cleanup deletes — POSITIVE scenarios
-    ==========
+    // ========== ProductAvailable / cleanup deletes — POSITIVE scenarios ==========
 
     @Test
     public void testSaveProductAvailable() {

@@ -41,6 +41,22 @@ public class Orders {
     @Column(name = "kitchen_notes", columnDefinition = "text")
     private String kitchenNotes;
 
+    @Column(name = "requires_approval")
+    private Boolean requiresApproval;
+
+    @Column(name = "approval_status")
+    private String approvalStatus;
+
+    @ManyToOne
+    @JoinColumn(name = "approved_by_user_id")
+    private User approvedBy;
+
+    @Column(name = "approved_at")
+    private LocalDateTime approvedAt;
+
+    @Column(name = "approval_notes", columnDefinition = "text")
+    private String approvalNotes;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -105,4 +121,19 @@ public class Orders {
 
     public String getKitchenNotes() { return kitchenNotes; }
     public void setKitchenNotes(String kitchenNotes) { this.kitchenNotes = kitchenNotes; }
+
+    public Boolean getRequiresApproval() { return requiresApproval; }
+    public void setRequiresApproval(Boolean requiresApproval) { this.requiresApproval = requiresApproval; }
+
+    public String getApprovalStatus() { return approvalStatus; }
+    public void setApprovalStatus(String approvalStatus) { this.approvalStatus = approvalStatus; }
+
+    public User getApprovedBy() { return approvedBy; }
+    public void setApprovedBy(User approvedBy) { this.approvedBy = approvedBy; }
+
+    public LocalDateTime getApprovedAt() { return approvedAt; }
+    public void setApprovedAt(LocalDateTime approvedAt) { this.approvedAt = approvedAt; }
+
+    public String getApprovalNotes() { return approvalNotes; }
+    public void setApprovalNotes(String approvalNotes) { this.approvalNotes = approvalNotes; }
 }
