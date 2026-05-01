@@ -20,9 +20,14 @@ import {
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { selectCurrentUser } from '../../store/slices/authSlice.js';
+import { Link as RouterLink } from 'react-router-dom';
 import UndoIcon from '@mui/icons-material/Undo';
+import DirectionsRunIcon from '@mui/icons-material/DirectionsRun';
+import ReportProblemIcon from '@mui/icons-material/ReportProblem';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 import {
   fetchDeliveryOnlineOrders,
+  pickUpDeliveryTrip,
   updateKitchenOrderStatus,
 } from '../../api/endpoints.js';
 import KitchenOrderItems from './KitchenOrderItems.jsx';
@@ -32,6 +37,7 @@ import {
   GLASS_PAPER,
 } from './dashboardStyles.js';
 import EmployeeQuickTools from './EmployeeQuickTools.jsx';
+import MyTasks from './MyTasks.jsx';
 
 export default function DeliveryDashboard() {
   const user = useSelector(selectCurrentUser);
@@ -49,6 +55,19 @@ export default function DeliveryDashboard() {
       setToast(`Order #${orderId} sent back to kitchen.`);
     } catch (err) {
       setToast(err.response?.data?.error || err.message || 'Send-back failed.');
+    } finally {
+      setSendingId(null);
+    }
+  };
+
+  const pickUp = async (orderId) => {
+    setSendingId(orderId);
+    try {
+      const trip = await pickUpDeliveryTrip(orderId, user?.userid);
+      setOrders((list) => list.filter((o) => o.orderId !== orderId));
+      setToast(`Picked up order #${orderId} (trip #${trip?.id}).`);
+    } catch (err) {
+      setToast(err.response?.data?.error || err.message || 'Pickup failed.');
     } finally {
       setSendingId(null);
     }
@@ -129,6 +148,33 @@ export default function DeliveryDashboard() {
           >
             Refresh
           </Button>
+          <Button
+            component={RouterLink}
+            to="/dashboard/delivery/trips"
+            size="small"
+            startIcon={<DirectionsRunIcon />}
+            sx={RAINBOW_OUTLINE_BTN}
+          >
+            My trips
+          </Button>
+          <Button
+            component={RouterLink}
+            to="/dashboard/delivery/issues"
+            size="small"
+            startIcon={<ReportProblemIcon />}
+            sx={RAINBOW_OUTLINE_BTN}
+          >
+            Issues
+          </Button>
+          <Button
+            component={RouterLink}
+            to="/dashboard/delivery/shift"
+            size="small"
+            startIcon={<AssessmentIcon />}
+            sx={RAINBOW_OUTLINE_BTN}
+          >
+            Shift summary
+          </Button>
         </Stack>
 
         {loading && (
@@ -175,19 +221,35 @@ export default function DeliveryDashboard() {
                         : '—'}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        size="small"
-                        startIcon={<UndoIcon />}
-                        disabled={sendingId === o.orderId}
-                        onClick={() => sendBack(o.orderId)}
-                        sx={{
-                          fontWeight: 700,
-                          color: '#c62828',
-                          textTransform: 'none',
-                        }}
-                      >
-                        {sendingId === o.orderId ? 'Sending…' : 'Send back'}
-                      </Button>
+                      <Stack direction="row" spacing={0.5}>
+                        <Button
+                          size="small"
+                          startIcon={<DirectionsRunIcon />}
+                          disabled={sendingId === o.orderId}
+                          onClick={() => pickUp(o.orderId)}
+                          data-testid={`pickup-${o.orderId}`}
+                          sx={{
+                            fontWeight: 700,
+                            color: '#1565c0',
+                            textTransform: 'none',
+                          }}
+                        >
+                          {sendingId === o.orderId ? 'Working…' : 'Pick up'}
+                        </Button>
+                        <Button
+                          size="small"
+                          startIcon={<UndoIcon />}
+                          disabled={sendingId === o.orderId}
+                          onClick={() => sendBack(o.orderId)}
+                          sx={{
+                            fontWeight: 700,
+                            color: '#c62828',
+                            textTransform: 'none',
+                          }}
+                        >
+                          Send back
+                        </Button>
+                      </Stack>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -198,6 +260,7 @@ export default function DeliveryDashboard() {
 
         <Divider sx={{ my: 3 }} />
       </Paper>
+      <MyTasks department="delivery" />
       <EmployeeQuickTools />
       <Snackbar
         open={Boolean(toast)}

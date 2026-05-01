@@ -19,6 +19,7 @@ import {
   GLASS_PAPER,
 } from './dashboardStyles.js';
 import EmployeeQuickTools from './EmployeeQuickTools.jsx';
+import MyTasks from './MyTasks.jsx';
 
 const CARDS = [
   {
@@ -135,6 +136,7 @@ export default function KitchenDashboard() {
         })}
       </Grid>
 
+      <MyTasks department="kitchen" />
       <EmployeeQuickTools />
     </Box>
   );

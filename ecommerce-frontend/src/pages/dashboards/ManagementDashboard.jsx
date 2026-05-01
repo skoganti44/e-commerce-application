@@ -20,6 +20,16 @@ import InventoryIcon from '@mui/icons-material/Inventory2';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import GroupsIcon from '@mui/icons-material/Groups';
+import GavelIcon from '@mui/icons-material/Gavel';
+import VerifiedIcon from '@mui/icons-material/Verified';
+import LocalOfferIcon from '@mui/icons-material/LocalOffer';
+import SavingsIcon from '@mui/icons-material/Savings';
+import { Link as RouterLink } from 'react-router-dom';
 import { selectCurrentUser } from '../../store/slices/authSlice.js';
 import {
   fetchSupplyRequests,
@@ -31,6 +41,7 @@ import {
   GLASS_PAPER,
 } from './dashboardStyles.js';
 import EmployeeQuickTools from './EmployeeQuickTools.jsx';
+import MyTasks from './MyTasks.jsx';
 
 const STATUS_META = {
   waiting: { label: 'Waiting', bg: '#fff3e0', fg: '#e65100', rank: 1 },
@@ -154,6 +165,86 @@ export default function ManagementDashboard() {
         >
           Welcome Manager, {user?.name || ''}
         </Typography>
+        <Stack
+          direction="row"
+          spacing={1}
+          justifyContent="center"
+          flexWrap="wrap"
+          sx={{ mt: 2 }}
+        >
+          <Button
+            component={RouterLink}
+            to="/dashboard/management/ops"
+            startIcon={<DashboardIcon />}
+            sx={RAINBOW_OUTLINE_BTN}
+          >
+            Live Ops
+          </Button>
+          <Button
+            component={RouterLink}
+            to="/dashboard/management/orders-audit"
+            startIcon={<ReceiptLongIcon />}
+            sx={RAINBOW_OUTLINE_BTN}
+          >
+            Orders audit
+          </Button>
+          <Button
+            component={RouterLink}
+            to="/dashboard/management/deliveries-audit"
+            startIcon={<LocalShippingIcon />}
+            sx={RAINBOW_OUTLINE_BTN}
+          >
+            Deliveries audit
+          </Button>
+          <Button
+            component={RouterLink}
+            to="/dashboard/management/day-pnl"
+            startIcon={<AccountBalanceIcon />}
+            sx={RAINBOW_OUTLINE_BTN}
+          >
+            Day P&amp;L
+          </Button>
+          <Button
+            component={RouterLink}
+            to="/dashboard/management/staff-performance"
+            startIcon={<GroupsIcon />}
+            sx={RAINBOW_OUTLINE_BTN}
+          >
+            Staff performance
+          </Button>
+          <Button
+            component={RouterLink}
+            to="/dashboard/management/refunds"
+            startIcon={<GavelIcon />}
+            sx={RAINBOW_OUTLINE_BTN}
+          >
+            Refunds
+          </Button>
+          <Button
+            component={RouterLink}
+            to="/dashboard/management/approvals"
+            startIcon={<VerifiedIcon />}
+            sx={RAINBOW_OUTLINE_BTN}
+          >
+            Approvals
+          </Button>
+          <Button
+            component={RouterLink}
+            to="/dashboard/management/discounts"
+            startIcon={<LocalOfferIcon />}
+            sx={RAINBOW_OUTLINE_BTN}
+          >
+            Discounts
+          </Button>
+          <Button
+            component={RouterLink}
+            to="/dashboard/management/cash-reconciliation"
+            startIcon={<SavingsIcon />}
+            sx={RAINBOW_OUTLINE_BTN}
+          >
+            Cash recon
+          </Button>
+        </Stack>
       </Paper>
 
       <Paper elevation={0} sx={{ ...GLASS_PAPER, mb: 3 }}>
@@ -216,6 +307,7 @@ export default function ManagementDashboard() {
                 <TableRow>
                   <TableCell sx={{ fontWeight: 800 }}>Item</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Category</TableCell>
+                  <TableCell sx={{ fontWeight: 800 }}>Team</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>In stock</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Threshold</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Requested</TableCell>
@@ -244,6 +336,18 @@ export default function ManagementDashboard() {
                       </TableCell>
                       <TableCell sx={{ color: '#6d4c41' }}>
                         {r.category}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          data-testid={`supply-team-${r.id}`}
+                          label={(r.requestedByTeam || 'kitchen').toUpperCase()}
+                          sx={{
+                            fontWeight: 700,
+                            bgcolor: '#e3f2fd',
+                            color: '#1565c0',
+                          }}
+                        />
                       </TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>
                         {fmt(r.currentStock)} {r.unit}
@@ -292,6 +396,8 @@ export default function ManagementDashboard() {
           </Box>
         )}
       </Paper>
+
+      <MyTasks department="management" />
 
       <EmployeeQuickTools />
 

@@ -19,6 +19,8 @@ import {
 } from '@mui/material';
 import BakeryDiningIcon from '@mui/icons-material/BakeryDining';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
+import { Link as RouterLink } from 'react-router-dom';
 import { selectCurrentUser } from '../../store/slices/authSlice.js';
 import UndoIcon from '@mui/icons-material/Undo';
 import {
@@ -29,9 +31,11 @@ import KitchenOrderItems from './KitchenOrderItems.jsx';
 import {
   RAINBOW_TEXT,
   RAINBOW_OUTLINE_BTN,
+  RAINBOW_FILLED_BTN,
   GLASS_PAPER,
 } from './dashboardStyles.js';
 import EmployeeQuickTools from './EmployeeQuickTools.jsx';
+import MyTasks from './MyTasks.jsx';
 
 export default function BakeryDashboard() {
   const user = useSelector(selectCurrentUser);
@@ -130,6 +134,15 @@ export default function BakeryDashboard() {
           >
             Refresh
           </Button>
+          <Button
+            component={RouterLink}
+            to="/dashboard/bakery/pos"
+            size="small"
+            startIcon={<PointOfSaleIcon />}
+            sx={RAINBOW_FILLED_BTN}
+          >
+            Counter POS
+          </Button>
         </Stack>
 
         {loading && (
@@ -197,6 +210,7 @@ export default function BakeryDashboard() {
 
         <Divider sx={{ my: 3 }} />
       </Paper>
+      <MyTasks department="bakery" />
       <EmployeeQuickTools />
       <Snackbar
         open={Boolean(toast)}
