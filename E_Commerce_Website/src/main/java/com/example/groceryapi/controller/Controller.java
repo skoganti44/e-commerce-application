@@ -15,8 +15,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.groceryapi.config.JwtUtil;
 import com.example.groceryapi.model.Payment;
-import com.example.groceryapi.model.Product;
 import com.example.groceryapi.model.Role;
 import com.example.groceryapi.model.ShippingAddress;
 import com.example.groceryapi.model.UserRole;
@@ -27,6 +27,9 @@ import com.example.groceryapi.service.UserService;
 public class Controller {
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private JwtUtil jwtUtil;
 
     @GetMapping(value = "/users", headers = "Accept=application/json")
     public List<User> fetchUsers() {
@@ -54,7 +57,14 @@ public class Controller {
     public ResponseEntity<?> login(@RequestBody Map<String, String> body) {
         try {
             User user = userService.login(body.get("email"), body.get("password"));
-            return ResponseEntity.ok(toPublicUser(user));
+            List<String> roles = userService.fetchRoleNamesForUser(user.getuserid());
+            List<String> departments = userService.fetchDepartmentsForUser(user.getuserid());
+            String token = jwtUtil.generateToken(user.getuserid(), user.getemail(), roles, departments);
+
+            Map<String, Object> body2 = new java.util.HashMap<>();
+            body2.put("token", token);
+            body2.put("user", toPublicUser(user));
+            return ResponseEntity.ok(body2);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(401).body(Map.of("error", e.getMessage()));
         }
@@ -117,7 +127,8 @@ public class Controller {
         try {
             int userid = ((Number) body.get("userid")).intValue();
             Long cartItemId = body.get("cartItemId") == null
-                    ? null : ((Number) body.get("cartItemId")).longValue();
+                    ? null
+                    : ((Number) body.get("cartItemId")).longValue();
             int quantity = body.get("quantity") == null ? 0 : ((Number) body.get("quantity")).intValue();
             userService.updateCartItemQuantity(userid, cartItemId, quantity);
             return ResponseEntity.ok(userService.fetchCartByUserId(userid));
@@ -129,7 +140,7 @@ public class Controller {
 
     @DeleteMapping(value = "/cart/item", produces = "application/json")
     public ResponseEntity<?> removeCartItem(@RequestParam int userid,
-                                            @RequestParam("itemId") Long itemId) {
+            @RequestParam("itemId") Long itemId) {
         try {
             userService.removeCartItem(userid, itemId);
             return ResponseEntity.ok(userService.fetchCartByUserId(userid));
@@ -193,14 +204,14 @@ public class Controller {
                 userService.fetchKitchenOrders("instore", List.of("done")));
     }
 
-    @PostMapping(value = "/kitchen/daily-stock/{stockId}/adjust",
-            consumes = "application/json", produces = "application/json")
+    @PostMapping(value = "/kitchen/daily-stock/{stockId}/adjust", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> adjustDailyStockPrepared(
             @PathVariable("stockId") long stockId,
             @RequestBody Map<String, Object> body) {
         try {
             int delta = body.get("delta") == null
-                    ? 0 : ((Number) body.get("delta")).intValue();
+                    ? 0
+                    : ((Number) body.get("delta")).intValue();
             return ResponseEntity.ok(
                     userService.adjustDailyStockPrepared(stockId, delta));
         } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
@@ -219,8 +230,7 @@ public class Controller {
         return ResponseEntity.ok(userService.fetchInStockSupplies());
     }
 
-    @PostMapping(value = "/kitchen/supplies/{supplyId}/request",
-            consumes = "application/json", produces = "application/json")
+    @PostMapping(value = "/kitchen/supplies/{supplyId}/request", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> requestMoreSupply(
             @PathVariable("supplyId") long supplyId,
             @RequestBody Map<String, Object> body) {
@@ -243,8 +253,7 @@ public class Controller {
         }
     }
 
-    @PostMapping(value = "/kitchen/supplies",
-            consumes = "application/json", produces = "application/json")
+    @PostMapping(value = "/kitchen/supplies", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> saveSupply(@RequestBody Map<String, Object> body) {
         try {
             return ResponseEntity.ok(userService.saveSupply(body));
@@ -254,8 +263,7 @@ public class Controller {
         }
     }
 
-    @PostMapping(value = "/kitchen/supplies/{supplyId}/adjust",
-            consumes = "application/json", produces = "application/json")
+    @PostMapping(value = "/kitchen/supplies/{supplyId}/adjust", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> adjustSupplyStock(
             @PathVariable("supplyId") long supplyId,
             @RequestBody Map<String, Object> body) {
@@ -277,13 +285,11 @@ public class Controller {
         }
     }
 
-    @PostMapping(value = "/kitchen/supplies/bulk-status",
-            consumes = "application/json", produces = "application/json")
+    @PostMapping(value = "/kitchen/supplies/bulk-status", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> bulkUpdateSupplyStatuses(@RequestBody Map<String, Object> body) {
         try {
             @SuppressWarnings("unchecked")
-            List<Map<String, Object>> updates =
-                    (List<Map<String, Object>>) body.get("updates");
+            List<Map<String, Object>> updates = (List<Map<String, Object>>) body.get("updates");
             return ResponseEntity.ok(userService.updateSupplyOrderStatuses(updates));
         } catch (IllegalArgumentException | NullPointerException | ClassCastException e) {
             return ResponseEntity.badRequest().body(Map.of("error",
@@ -291,14 +297,12 @@ public class Controller {
         }
     }
 
-    @GetMapping(value = "/management/supply-requests",
-            headers = "Accept=application/json")
+    @GetMapping(value = "/management/supply-requests", headers = "Accept=application/json")
     public ResponseEntity<List<Map<String, Object>>> fetchSupplyRequests() {
         return ResponseEntity.ok(userService.fetchRequestedSupplies());
     }
 
-    @PostMapping(value = "/management/supplies/{supplyId}/fulfill",
-            consumes = "application/json", produces = "application/json")
+    @PostMapping(value = "/management/supplies/{supplyId}/fulfill", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> fulfillSupply(
             @PathVariable("supplyId") long supplyId,
             @RequestBody Map<String, Object> body) {
@@ -329,8 +333,7 @@ public class Controller {
         }
     }
 
-    @PostMapping(value = "/kitchen/order/{orderId}/status",
-            consumes = "application/json", produces = "application/json")
+    @PostMapping(value = "/kitchen/order/{orderId}/status", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> updateKitchenOrderStatus(
             @PathVariable("orderId") long orderId,
             @RequestBody Map<String, Object> body) {
@@ -461,9 +464,11 @@ public class Controller {
         try {
             int createdById = ((Number) body.get("createdByUserId")).intValue();
             Integer assignedUserId = body.get("assignedToUserId") == null
-                    ? null : ((Number) body.get("assignedToUserId")).intValue();
+                    ? null
+                    : ((Number) body.get("assignedToUserId")).intValue();
             Long relatedOrderId = body.get("relatedOrderId") == null
-                    ? null : ((Number) body.get("relatedOrderId")).longValue();
+                    ? null
+                    : ((Number) body.get("relatedOrderId")).longValue();
             Map<String, Object> created = userService.createTask(
                     createdById,
                     (String) body.get("assignedToDepartment"),
@@ -496,7 +501,8 @@ public class Controller {
     public ResponseEntity<?> updateTaskStatus(@PathVariable long taskId, @RequestBody Map<String, Object> body) {
         try {
             Integer actingUserId = body.get("actingUserId") == null
-                    ? null : ((Number) body.get("actingUserId")).intValue();
+                    ? null
+                    : ((Number) body.get("actingUserId")).intValue();
             Map<String, Object> updated = userService.updateTaskStatus(
                     taskId,
                     (String) body.get("status"),
@@ -655,10 +661,9 @@ public class Controller {
         }
     }
 
-    @PostMapping(value = "/supplies/{supplyId}/request",
-                 consumes = "application/json", produces = "application/json")
+    @PostMapping(value = "/supplies/{supplyId}/request", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> requestSupplyByTeam(@PathVariable long supplyId,
-                                                  @RequestBody Map<String, Object> body) {
+            @RequestBody Map<String, Object> body) {
         try {
             BigDecimal qty = toBigDecimal(body.get("requestedQty"));
             String urgency = (String) body.get("urgency");
@@ -671,8 +676,7 @@ public class Controller {
         }
     }
 
-    @PostMapping(value = "/discount-campaigns",
-                 consumes = "application/json", produces = "application/json")
+    @PostMapping(value = "/discount-campaigns", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> proposeDiscountCampaign(@RequestBody Map<String, Object> body) {
         try {
             int proposedById = ((Number) body.get("proposedByUserId")).intValue();
@@ -700,10 +704,9 @@ public class Controller {
         }
     }
 
-    @PostMapping(value = "/discount-campaigns/{id}/decision",
-                 consumes = "application/json", produces = "application/json")
+    @PostMapping(value = "/discount-campaigns/{id}/decision", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> decideDiscountCampaign(@PathVariable long id,
-                                                     @RequestBody Map<String, Object> body) {
+            @RequestBody Map<String, Object> body) {
         try {
             int managerId = ((Number) body.get("managerUserId")).intValue();
             String decision = (String) body.get("decision");
@@ -716,10 +719,9 @@ public class Controller {
         }
     }
 
-    @PostMapping(value = "/orders/{orderId}/flag-approval",
-                 consumes = "application/json", produces = "application/json")
+    @PostMapping(value = "/orders/{orderId}/flag-approval", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> flagOrderForApproval(@PathVariable long orderId,
-                                                   @RequestBody Map<String, Object> body) {
+            @RequestBody Map<String, Object> body) {
         try {
             String notes = body == null ? null : (String) body.get("notes");
             return ResponseEntity.ok(userService.flagOrderForApproval(orderId, notes));
@@ -738,10 +740,9 @@ public class Controller {
         }
     }
 
-    @PostMapping(value = "/orders/{orderId}/approval-decision",
-                 consumes = "application/json", produces = "application/json")
+    @PostMapping(value = "/orders/{orderId}/approval-decision", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> decideOrderApproval(@PathVariable long orderId,
-                                                  @RequestBody Map<String, Object> body) {
+            @RequestBody Map<String, Object> body) {
         try {
             int managerId = ((Number) body.get("managerUserId")).intValue();
             String decision = (String) body.get("decision");
@@ -779,10 +780,9 @@ public class Controller {
         }
     }
 
-    @PostMapping(value = "/refund-requests/{id}/decision",
-                 consumes = "application/json", produces = "application/json")
+    @PostMapping(value = "/refund-requests/{id}/decision", consumes = "application/json", produces = "application/json")
     public ResponseEntity<?> decideRefundRequest(@PathVariable long id,
-                                                  @RequestBody Map<String, Object> body) {
+            @RequestBody Map<String, Object> body) {
         try {
             int managerId = ((Number) body.get("managerUserId")).intValue();
             String decision = (String) body.get("decision");
@@ -820,9 +820,12 @@ public class Controller {
     }
 
     private static BigDecimal toBigDecimal(Object raw) {
-        if (raw == null) return null;
-        if (raw instanceof Number) return BigDecimal.valueOf(((Number) raw).doubleValue());
-        if (raw instanceof String s && !s.isBlank()) return new BigDecimal(s);
+        if (raw == null)
+            return null;
+        if (raw instanceof Number)
+            return BigDecimal.valueOf(((Number) raw).doubleValue());
+        if (raw instanceof String s && !s.isBlank())
+            return new BigDecimal(s);
         return null;
     }
 
