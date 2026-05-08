@@ -1,0 +1,41 @@
+version: "3.9"
+
+services:
+  app:
+    build: .
+    container_name: ecommerce_go_app
+    ports:
+      - "8080:8080"
+    environment:
+      DB_URL: "postgres://postgres:Disney%401701@db:5432/ecommercedb?sslmode=disable"
+      JWT_SECRET: "ChangeThisToALongRandomStringAtLeast32CharsLong!!"
+      JWT_EXPIRATION_MS: "86400000"
+      PORT: "8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: ecommerce_go_db
+    environment:
+      POSTGRES_DB: ecommercedb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "Disney@1701"
+    ports:
+      - "5432:5432"
+    volumes:
+      - ecommerce_go_pgdata:/var/lib/postgresql/data
+      - ./sql/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./sql/02_data.sql:/docker-entrypoint-initdb.d/02_data.sql:ro
+      - ./sql/kitchen_seed.sql:/docker-entrypoint-initdb.d/03_kitchen_seed.sql:ro
+      - ./sql/discount_cakes_cookies.sql:/docker-entrypoint-initdb.d/04_discount_cakes_cookies.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ecommercedb"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  ecommerce_go_pgdata:

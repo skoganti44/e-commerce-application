@@ -1,0 +1,19 @@
+# Compiled binaries
+*.exe
+*.dll
+*.so
+*.dylib
+e_commerce_website_go
+e_commerce_website_go.exe
+
+# Test artefacts
+*.test
+*.out
+coverage.out
+
+# Vendor (we use the module cache, not vendoring)
+/vendor/
+
+# IDE
+.idea/
+.vscode/
