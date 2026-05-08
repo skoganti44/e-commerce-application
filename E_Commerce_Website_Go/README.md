@@ -128,6 +128,33 @@ app on `http://localhost:8080`. Stop with `Ctrl+C`. Wipe the seeded data with
 
 ---
 
+## Running the tests
+
+The suite is in `*_test.go` files alongside each handler domain. Tests run
+against a real Postgres at `DB_URL`, exercising every endpoint via the
+in-memory Gin router (`httptest.NewRecorder`) — no separate server process
+needed.
+
+```powershell
+$env:DB_URL = "postgres://postgres:Disney%401701@localhost:5432/ecommercedb?sslmode=disable"
+
+# all tests
+go test -v ./...
+
+# one domain
+go test -run 'TestRegister|TestLogin' -v ./...
+
+# count fails only
+go test -count=1 ./...
+```
+
+The full suite is 183 tests across 11 files; runs in ~2 seconds. Tests use
+the seeded users from `sql/02_data.sql` (`alice@example.com`, etc.) — they
+create new orders/tasks/refunds but never alter or delete seed rows, so the
+suite is idempotent and safe to re-run.
+
+---
+
 ## Stack
 
 - Go 1.22 + [Gin](https://github.com/gin-gonic/gin) HTTP router
