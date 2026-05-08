@@ -6,6 +6,11 @@ endpoints, talks to the same Postgres schema, and issues compatible JWTs so
 the existing [../ecommerce-frontend](../ecommerce-frontend) can point at this
 service unchanged by switching the API base URL.
 
+> **Recommended Postgres**: run [../postgres-db/](../postgres-db/) — the shared
+> Postgres + pgAdmin stack — and point this service at it via `DB_URL`. The
+> embedded `db:` service in this folder's `docker-compose.yml` is kept as a
+> self-contained fallback. Don't run both at once.
+
 ---
 
 ## Quick start (verified working)
